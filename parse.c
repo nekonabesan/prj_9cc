@@ -3,7 +3,6 @@
 static Vector *tokens;
 static int pos;
 
-
 static Node *new_node(int op, Node *lhs, Node *rhs) {
   Node *node = malloc(sizeof(Node));
   node->ty = op;
@@ -28,27 +27,41 @@ static Node *number() {
   return new_node_num(t->val);
 }
 
+static Node *mul() {
+    Node *lhs = number();
+    for (;;) {
+      Token *t = tokens->data[pos];
+      int op = t->ty;
+      if (op != '*' && op != '/') {
+          return lhs;
+      }
+      pos++;
+      lhs = new_node(op, lhs, number());
+    }
+}
+
 static Node *expr() {
-  Node *lhs = number();
+  Node *lhs = mul();
   for (;;) {
     Token *t = tokens->data[pos];
     int op = t->ty;
     if(op != '+' && op != '-') {
-      break;
+      return lhs;
     }
     pos++;
-    lhs = new_node(op, lhs, number());
+    lhs = new_node(op, lhs, mul());
   }
-
-  Token *t = tokens->data[pos];
-  if (t->ty != TK_EOF) {
-    error("stray token: %s", t->input);
-  }
-  return lhs;
 }
 
 Node *parse(Vector *v) {
   tokens = v;
   pos = 0;
-  return expr();
+
+  Node *node = expr();
+
+  Token *t = tokens->data[pos];
+  if (t->ty != TK_EOF) {
+    error("stray token %s", t->input);
+  }
+  return node;
 }
