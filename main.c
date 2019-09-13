@@ -11,9 +11,10 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  // Tokenize and parse
+  // Tokenize and parse.
   Vector *tokens = tokenize(argv[1]);
-  Node *node = parse(tokens);
+
+  Node* node = parse(tokens);
 
   Vector *irv = gen_ir(node);
   alloc_regs(irv);

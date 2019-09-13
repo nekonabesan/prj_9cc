@@ -38,16 +38,18 @@ void util_test();
 // token.c
 
 enum {
-  TK_NUM = 256,  // Number literal
-  TK_RETURN,     // "return"
-  TK_EOF,        // End marker
+  TK_NUM = 256, // Number literal
+  TK_IDENT,     // Identifier
+  TK_RETURN,    // "return"
+  TK_EOF,       // End marker
 };
 
 // Token type
 typedef struct {
-  int ty;       // Token type
-  int val;      // Number literal
-  char *input;  // Token string (for error reporting)
+  int ty;      // Token type
+  int val;     // Number literal
+  char *name;  // Identifier
+  char *input; // Token string (for error reporting)
 } Token;
 
 Vector *tokenize(char *p);
@@ -55,10 +57,11 @@ Vector *tokenize(char *p);
 // parse.c
 
 enum {
-  ND_NUM = 256,  // Number literal
-  ND_RETURN,     // Return statement
-  ND_COMP_STMT,  // Compound statement
-  ND_EXPR_STMT,  // Expressions statement
+  ND_NUM = 256,     // Number literal
+  ND_IDENT,         // Identifier
+  ND_RETURN,        // Return statement
+  ND_COMP_STMT,     // Compound statement
+  ND_EXPR_STMT,     // Expressions statement
 };
 
 typedef struct Node {
@@ -66,6 +69,7 @@ typedef struct Node {
   struct Node *lhs;  // left-hand side
   struct Node *rhs;  // right-hand side
   int val;           // Number litelal
+  char *name;        // Identifire
   struct Node *expr; // "return" or expression stmt
   Vector *stmts;     // Compound statement
 } Node;
@@ -78,6 +82,9 @@ enum {
   IR_IMM,
   IR_MOV,
   IR_RETURN,
+  IR_ALLOCA,
+  IR_LOAD,
+  IR_STORE,
   IR_KILL,
   IR_NOP,
 };
