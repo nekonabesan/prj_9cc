@@ -28,7 +28,7 @@ void gen_x86(Vector *irv) {
         break;
       case '/':
         printf("  mov rax, %s\n", regs[ir->lhs]);
-        printf("  cqo%s\n");
+        printf("  cqo\n");
         printf("  div %s\n", regs[ir->rhs]);
         printf("  mov %s, rax\n", regs[ir->lhs]);
         break;
