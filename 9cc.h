@@ -9,9 +9,10 @@
 #include <stdnoreturn.h>
 #include <string.h>
 
-// util.c
+/// util.c
 
 noreturn void error(char *fmt, ...);
+char *format(char *fmt, ...);
 
 typedef struct {
   void **data;
@@ -32,19 +33,20 @@ void map_put(Map *map, char *key, void *val);
 void *map_get(Map *map, char *key);
 bool map_exists(Map *map, char *key);
 
-// util_test.c
+/// util_test.c
 void util_test();
 
-// token.c
+/// token.c
 
 enum {
   TK_NUM = 256, // Number literal
   TK_IDENT,     // Identifier
+  TK_IF,        // "If"
   TK_RETURN,    // "return"
   TK_EOF,       // End marker
 };
 
-// Token type
+/// Token type
 typedef struct {
   int ty;      // Token type
   int val;     // Number literal
@@ -54,12 +56,13 @@ typedef struct {
 
 Vector *tokenize(char *p);
 
-// parse.c
+/// parse.c
 
 enum {
   ND_NUM = 256,     // Number literal
   ND_IDENT,         // Identifier
-  ND_RETURN,        // Return statement
+  ND_IF,            // "If"
+  ND_RETURN,        // "return"
   ND_COMP_STMT,     // Compound statement
   ND_EXPR_STMT,     // Expressions statement
 };
@@ -72,17 +75,23 @@ typedef struct Node {
   char *name;        // Identifire
   struct Node *expr; // "return" or expression stmt
   Vector *stmts;     // Compound statement
+
+  /// "If"
+  struct Node *cond;
+  struct Node *then;
 } Node;
 
 Node *parse(Vector *tokens);
 
-// ir.c
+/// ir.c
 
 enum {
-  IR_IMM,
+  IR_IMM = 256,
   IR_ADD_IMM,
   IR_MOV,
   IR_RETURN,
+  IR_LABEL,
+  IR_UNLESS,
   IR_ALLOCA,
   IR_LOAD,
   IR_STORE,
@@ -96,12 +105,34 @@ typedef struct {
   int rhs;
 } IR;
 
-Vector *gen_ir(Node *node);
+enum {
+  IR_TY_NOARG,
+  IR_TY_REG,
+  IR_TY_LABEL,
+  IR_TY_REG_REG,
+  IR_TY_REG_IMM,
+  IR_TY_REG_LABEL,
+};
 
-// regalloc.c
+typedef struct {
+  int op;
+  char *name;
+  int ty;
+} IRInfo;
+
+extern IRInfo irinfo[];
+IRInfo *get_irinfo(IR *ir);
+
+Vector *gen_ir(Node *node);
+void dump_ir(Vector *irv);
+
+/// regalloc.c
 
 extern char *regs[];
 void alloc_regs(Vector *irv);
 
-// codegen.c
+/// codegen.c
 void gen_x86(Vector *irv);
+
+/// main.c
+char **argv;
