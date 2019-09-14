@@ -80,6 +80,7 @@ Node *parse(Vector *tokens);
 
 enum {
   IR_IMM,
+  IR_ADD_IMM,
   IR_MOV,
   IR_RETURN,
   IR_ALLOCA,
@@ -93,9 +94,6 @@ typedef struct {
   int op;
   int lhs;
   int rhs;
-
-  bool has_imm;
-  int imm;
 } IR;
 
 Vector *gen_ir(Node *node);
