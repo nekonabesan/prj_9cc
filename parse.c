@@ -46,8 +46,22 @@ static Node *term() {
   }
 
   if (t->ty == TK_IDENT) {
-    node->ty = ND_IDENT;
     node->name = t->name;
+
+    if (!consume('(')) {
+      node->ty = ND_IDENT;
+      return node;
+    }
+
+    node->ty = ND_CALL;
+    node->args = new_vec();
+    if (consume(')'))
+      return node;
+
+    vec_push(node->args, assign());
+    while (consume(','))
+      vec_push(node->args, assign());
+    expect(')');
     return node;
   }
 
@@ -90,29 +104,29 @@ static Node *stmt() {
   Token *t = tokens->data[pos];
 
   switch (t->ty) {
-    case TK_IF:
-      pos++;
-      node->ty = ND_IF;
-      expect('(');
-      node->cond = assign();
-      expect(')');
+  case TK_IF:
+    pos++;
+    node->ty = ND_IF;
+    expect('(');
+    node->cond = assign();
+    expect(')');
 
-      node->then = stmt();
+    node->then = stmt();
 
-      if (consume(TK_ELSE))
-        node->els = stmt();
-      return node;
-    case TK_RETURN:
-      pos++;
-      node->ty = ND_RETURN;
-      node->expr = assign();
-      expect(';');
-      return node;
-    default:
-      node->ty = ND_EXPR_STMT;
-      node->expr = assign();
-      expect(';');
-      return node;
+    if (consume(TK_ELSE))
+      node->els = stmt();
+    return node;
+  case TK_RETURN:
+    pos++;
+    node->ty = ND_RETURN;
+    node->expr = assign();
+    expect(';');
+    return node;
+  default:
+    node->ty = ND_EXPR_STMT;
+    node->expr = assign();
+    expect(';');
+    return node;
   }
 }
 
