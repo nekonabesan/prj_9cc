@@ -1,5 +1,6 @@
 #include "9cc.h"
 
+
 int main(int argc, char **argv) {
   if (!strcmp(argv[1], "-test")) {
     util_test();
@@ -18,7 +19,7 @@ int main(int argc, char **argv) {
     input = argv[2];
   } else {
     if (argc != 2)
-      error("Usage: 9cc [-test] [-dump_ir] <code>\n");
+      error("Usage: 9cc [-test] [-dump_ir1] [-dump_ir2]  <code>\n");
     input = argv[1];
   }
 
