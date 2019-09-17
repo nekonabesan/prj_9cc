@@ -1,6 +1,6 @@
 #include "9cc.h"
 
-char *regs[] = {"rdi", "rsi", "r10", "r11", "r12", "r13", "r14", "r15"};
+char *regs[] = {"rbp", "r10", "r11", "rbx", "r12", "r13", "r14", "r15"};
 
 static bool used[sizeof(regs) / sizeof(*regs)];
 static int *reg_map;
@@ -15,8 +15,8 @@ static int alloc(int ir_reg) {
   for (int i = 0; i < sizeof(regs) / sizeof(*regs); i++) {
     if (used[i])
       continue;
-    used[i] = true;
     reg_map[ir_reg] = i;
+    used[i] = true;
     return i;
   }
   error("register exhausted");
@@ -27,16 +27,15 @@ static void kill(int r) {
   used[r] = false;
 }
 
-void alloc_regs(Vector *irv) {
-  reg_map = malloc(sizeof(int) * irv->len);
-  for (int i = 0; i < irv->len; i++)
-    reg_map[i] = -1;
+static void visit(Vector *irv) {
+  // r0 is a resserved register that is always mapped to rbp.
+  reg_map[0] = 0;
+  used[0] = true;
 
   for (int i = 0; i < irv->len; i++) {
     IR *ir = irv->data[i];
-    IRInfo *info = get_irinfo(ir);
 
-    switch (info->ty) {
+    switch (irinfo[ir->op].ty) {
     case IR_TY_REG:
     case IR_TY_REG_IMM:
     case IR_TY_REG_LABEL:
@@ -46,11 +45,29 @@ void alloc_regs(Vector *irv) {
       ir->lhs = alloc(ir->lhs);
       ir->rhs = alloc(ir->rhs);
       break;
+    case IR_TY_CALL:
+      ir->lhs = alloc(ir->lhs);
+      for (int i = 0; i < ir->nargs; i++)
+        ir->args[i] = alloc(ir->args[i]);
+      break;
     }
 
     if (ir->op == IR_KILL) {
       kill(ir->lhs);
       ir->op = IR_NOP;
     }
+  }
+}
+
+void alloc_regs(Vector *fns) {
+  for (int i = 0; i < fns->len; i++) {
+    Function *fn = fns->data[i];
+
+    reg_map = malloc(sizeof(int) * fn->ir->len);
+    for (int j = 0; j < fn->ir->len; j++)
+      reg_map[j] = -1;
+    memset(used, 0, sizeof(used));
+
+    visit(fn->ir);
   }
 }

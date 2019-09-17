@@ -33,7 +33,18 @@ void map_put(Map *map, char *key, void *val);
 void *map_get(Map *map, char *key);
 bool map_exists(Map *map, char *key);
 
+typedef struct {
+  char *data;
+  int capacity;
+  int len;
+} StringBuilder;
+
+StringBuilder *new_sb(void);
+void sb_append(StringBuilder *sb, char *s);
+char *sb_get(StringBuilder *sb);
+
 /// util_test.c
+
 void util_test();
 
 /// token.c
@@ -42,6 +53,9 @@ enum {
   TK_NUM = 256, // Number literal
   TK_IDENT,     // Identifier
   TK_IF,        // "If"
+  TK_ELSE,      // "else"
+  TK_LOGOR,     // ||
+  TK_LOGAND,    // &&
   TK_RETURN,    // "return"
   TK_EOF,       // End marker
 };
@@ -61,8 +75,12 @@ Vector *tokenize(char *p);
 enum {
   ND_NUM = 256,     // Number literal
   ND_IDENT,         // Identifier
-  ND_IF,            // "If"
+  ND_IF,            // "if"
+  ND_LOGAND,        // &&
+  ND_LOGOR,         // ||
   ND_RETURN,        // "return"
+  ND_CALL,          // Function call
+  ND_FUNC,          // Function definition
   ND_COMP_STMT,     // Compound statement
   ND_EXPR_STMT,     // Expressions statement
 };
@@ -72,30 +90,44 @@ typedef struct Node {
   struct Node *lhs;  // left-hand side
   struct Node *rhs;  // right-hand side
   int val;           // Number litelal
-  char *name;        // Identifire
   struct Node *expr; // "return" or expression stmt
   Vector *stmts;     // Compound statement
+
+  char *name;        // Identifire
 
   /// "If"
   struct Node *cond;
   struct Node *then;
+  struct Node *els;
+
+  // Function definition
+  struct Node *body;
+
+  // Function call
+  Vector *args;
 } Node;
 
-Node *parse(Vector *tokens);
+Vector *parse(Vector *tokens_);
 
-/// ir.c
+/// gen_ir.c
 
 enum {
-  IR_IMM = 256,
-  IR_ADD_IMM,
+  IR_ADD,
+  IR_SUB,
+  IR_MUL,
+  IR_DIV,
+  IR_IMM,
+  IR_SUB_IMM,
   IR_MOV,
   IR_RETURN,
+  IR_CALL,
   IR_LABEL,
+  IR_JMP,
   IR_UNLESS,
-  IR_ALLOCA,
   IR_LOAD,
   IR_STORE,
   IR_KILL,
+  IR_SAVE_ARGS,
   IR_NOP,
 };
 
@@ -103,27 +135,39 @@ typedef struct {
   int op;
   int lhs;
   int rhs;
+
+  // Function call
+  char *name;
+  int nargs;
+  int args[6];
 } IR;
 
 enum {
   IR_TY_NOARG,
   IR_TY_REG,
+  IR_TY_IMM,
+  IR_TY_JMP,
   IR_TY_LABEL,
   IR_TY_REG_REG,
   IR_TY_REG_IMM,
   IR_TY_REG_LABEL,
+  IR_TY_CALL,
 };
 
 typedef struct {
-  int op;
   char *name;
   int ty;
 } IRInfo;
 
-extern IRInfo irinfo[];
-IRInfo *get_irinfo(IR *ir);
+typedef struct {
+  char *name;
+  int stacksize;
+  Vector *ir;
+} Function;
 
-Vector *gen_ir(Node *node);
+extern IRInfo irinfo[];
+
+Vector *gen_ir(Vector *nodes);
 void dump_ir(Vector *irv);
 
 /// regalloc.c
@@ -131,8 +175,5 @@ void dump_ir(Vector *irv);
 extern char *regs[];
 void alloc_regs(Vector *irv);
 
-/// codegen.c
-void gen_x86(Vector *irv);
-
-/// main.c
-char **argv;
+/// gen_x86.c
+void gen_x86(Vector *fns);

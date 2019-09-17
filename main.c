@@ -18,27 +18,22 @@ int main(int argc, char **argv) {
     input = argv[2];
   } else {
     if (argc != 2)
-      error("Usage: 9cc [-test] [-dump_ir] <code>\n");
+      error("Usage: 9cc [-test] [-dump_ir1] [-dump_ir2]  <code>\n");
     input = argv[1];
   }
 
   // Tokenize and parse.
   Vector *tokens = tokenize(input);
+  Vector *fns = gen_ir(parse(tokens));
 
-  Node* node = parse(tokens);
-
-  Vector *irv = gen_ir(node);
   if (dump_ir1)
-    dump_ir(irv);
+    dump_ir(fns);
 
-  alloc_regs(irv);
+  alloc_regs(fns);
 
   if (dump_ir2)
-    dump_ir(irv);
+    dump_ir(fns);
 
-  printf(".intel_syntax noprefix\n");
-  printf(".global main\n");
-  printf("main:\n");
-  gen_x86(irv);
+  gen_x86(fns);
   return 0;
 }
