@@ -54,6 +54,8 @@ enum {
   TK_IDENT,     // Identifier
   TK_IF,        // "If"
   TK_ELSE,      // "else"
+  TK_LOGOR,     // ||
+  TK_LOGAND,    // &&
   TK_RETURN,    // "return"
   TK_EOF,       // End marker
 };
@@ -73,7 +75,9 @@ Vector *tokenize(char *p);
 enum {
   ND_NUM = 256,     // Number literal
   ND_IDENT,         // Identifier
-  ND_IF,            // "If"
+  ND_IF,            // "if"
+  ND_LOGAND,        // &&
+  ND_LOGOR,         // ||
   ND_RETURN,        // "return"
   ND_CALL,          // Function call
   ND_FUNC,          // Function definition
@@ -105,7 +109,7 @@ typedef struct Node {
 
 Vector *parse(Vector *tokens_);
 
-/// ir.c
+/// gen_ir.c
 
 enum {
   IR_ADD,
@@ -142,6 +146,7 @@ enum {
   IR_TY_NOARG,
   IR_TY_REG,
   IR_TY_IMM,
+  IR_TY_JMP,
   IR_TY_LABEL,
   IR_TY_REG_REG,
   IR_TY_REG_IMM,
@@ -170,5 +175,5 @@ void dump_ir(Vector *irv);
 extern char *regs[];
 void alloc_regs(Vector *irv);
 
-/// codegen.c
+/// gen_x86.c
 void gen_x86(Vector *fns);

@@ -130,14 +130,14 @@ static int gen_expr(Node *node) {
     add(IR_KILL, r2, -1);
     add(IR_UNLESS, r1, y);
     add(IR_IMM, r1, 1);
-    add(IR_LABEL, y, -1);
-	return r1;
+    add(IR_LABEL, y, r2);
   }
   case ND_IDENT: {
     int r = gen_lval(node);
     add(IR_LOAD, r, r);
     return r;
   }
+
   case ND_CALL: {
     int args[6];
     for (int i = 0; i < node->args->len; i++)
@@ -169,7 +169,7 @@ static int gen_expr(Node *node) {
   if (node->ty == '+')
     ty = IR_ADD;
   else if (node->ty == '-')
-    ty = IR_SUB;
+   ty = IR_SUB;
   else if (node->ty == '*')
     ty = IR_MUL;
   else
@@ -177,6 +177,7 @@ static int gen_expr(Node *node) {
 
   int lhs = gen_expr(node->lhs);
   int rhs = gen_expr(node->rhs);
+
   add(ty, lhs, rhs);
   add(IR_KILL, rhs, -1);
   return lhs;
