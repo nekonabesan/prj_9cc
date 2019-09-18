@@ -1,6 +1,7 @@
 #include "9cc.h"
 
 char *regs[] = {"rbp", "r10", "r11", "rbx", "r12", "r13", "r14", "r15"};
+char *regs8[] = {"bp1", "r10b", "r11b", "b1", "r12b", "r13b", "r14b", "r15b"};
 
 static bool used[sizeof(regs) / sizeof(*regs)];
 static int *reg_map;

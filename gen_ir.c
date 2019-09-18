@@ -11,6 +11,7 @@ IRInfo irinfo[] = {
       [IR_JMP] = {"JMP", IR_TY_JMP},
       [IR_KILL] = {"KILL", IR_TY_REG},
       [IR_LABEL] = {"", IR_TY_LABEL},
+      [IR_LT] = {"LT", IR_TY_REG_REG},
       [IR_LOAD] = {"LOAD", IR_TY_REG_REG},
       [IR_MOV] = {"MOV", IR_TY_REG_REG},
       [IR_MUL] = {"MUL", IR_TY_REG_REG},
@@ -83,16 +84,25 @@ static int gen_lval(Node *node) {
   if (node->ty != ND_IDENT)
     error("not an lvalue");
 
-  if (!map_exists(vars, node->name)) {
-    stacksize += 8;
-    map_put(vars, node->name, (void *)(intptr_t)stacksize);
-  }
+  if (!map_exists(vars, node->name))
+    error("undefined variable: %s", node->name);
+
 
   int r = regno++;
   int off = (intptr_t)map_get(vars, node->name);
   add(IR_MOV, r, 0);
   add(IR_SUB_IMM, r, off);
   return r;
+}
+
+static int gen_expr(Node *node);
+
+static int gen_binop(int ty, Node *lhs, Node *rhs) {
+  int r1 = gen_expr(lhs);
+  int r2 = gen_expr(rhs);
+  add(ty, r1, r2);
+  add(IR_KILL, r2, -1);
+  return r1;
 }
 
 static int gen_expr(Node *node) {
@@ -161,28 +171,28 @@ static int gen_expr(Node *node) {
     add(IR_KILL, rhs, -1);
     return lhs;
   }
+  case '+':
+    return gen_binop(IR_ADD, node->lhs, node->rhs);
+  case '-':
+    return gen_binop(IR_SUB, node->lhs, node->rhs);
+  case '*':
+    return gen_binop(IR_MUL, node->lhs, node->rhs);
+  case '/':
+    return gen_binop(IR_DIV, node->lhs, node->rhs);
+  case '<':
+    return gen_binop(IR_LT, node->lhs, node->rhs);
+  default:
+    assert(0 && "unknown AST type");
   }
-
-  assert(strchr("+-*/", node->ty));
-
-  int ty;
-  if (node->ty == '+')
-    ty = IR_ADD;
-  else if (node->ty == '-')
-    ty = IR_SUB;
-  else if (node->ty == '*')
-    ty = IR_MUL;
-  else
-    ty = IR_DIV;
-
-  int lhs = gen_expr(node->lhs);
-  int rhs = gen_expr(node->rhs);
-  add(ty, lhs, rhs);
-  add(IR_KILL, rhs, -1);
-  return lhs;
 }
 
 static void gen_stmt(Node *node) {
+  if (node->ty == ND_VARDEF) {
+    stacksize += 8;
+    map_put(vars, node->name, (void *)(intptr_t)stacksize);
+    return;
+  }
+
   if (node->ty == ND_IF) {
     int r = gen_expr(node->cond);
     int x = label++;
@@ -201,6 +211,22 @@ static void gen_stmt(Node *node) {
     add(IR_JMP, y, -1);
     add(IR_LABEL, x, -1);
     gen_stmt(node->els);
+    add(IR_LABEL, y, -1);
+    return;
+  }
+
+  if (node->ty == ND_FOR) {
+    int x = label++;
+    int y = label++;
+
+    add(IR_KILL, gen_expr(node->init), -1);
+    add(IR_LABEL, x, -1);
+    int r = gen_expr(node->cond);
+    add(IR_UNLESS, r, y);
+    add(IR_KILL, r, -1);
+    gen_stmt(node->body);
+    add(IR_KILL, gen_expr(node->inc), -1);
+    add(IR_JMP, x, -1);
     add(IR_LABEL, y, -1);
     return;
   }

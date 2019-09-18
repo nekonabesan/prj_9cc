@@ -52,8 +52,10 @@ void util_test();
 enum {
   TK_NUM = 256, // Number literal
   TK_IDENT,     // Identifier
-  TK_IF,        // "If"
+  TK_INT,       // "int"
+  TK_IF,        // "if"
   TK_ELSE,      // "else"
+  TK_FOR,       // "for"
   TK_LOGOR,     // ||
   TK_LOGAND,    // &&
   TK_RETURN,    // "return"
@@ -73,16 +75,18 @@ Vector *tokenize(char *p);
 /// parse.c
 
 enum {
-  ND_NUM = 256,     // Number literal
-  ND_IDENT,         // Identifier
-  ND_IF,            // "if"
-  ND_LOGAND,        // &&
-  ND_LOGOR,         // ||
-  ND_RETURN,        // "return"
-  ND_CALL,          // Function call
-  ND_FUNC,          // Function definition
-  ND_COMP_STMT,     // Compound statement
-  ND_EXPR_STMT,     // Expressions statement
+  ND_NUM = 256, // Number literal
+  ND_IDENT,     // Identifier
+  ND_VARDEF,    // Variable definition
+  ND_IF,        // "if"
+  ND_FOR,       // "for"
+  ND_LOGAND,    // &&
+  ND_LOGOR,     // ||
+  ND_RETURN,    // "return"
+  ND_CALL,      // Function call
+  ND_FUNC,      // Function definition
+  ND_COMP_STMT, // Compound statement
+  ND_EXPR_STMT, // Expressions statement
 };
 
 typedef struct Node {
@@ -95,19 +99,20 @@ typedef struct Node {
 
   char *name;        // Identifire
 
-  /// "If"
+  // "if" ( cond ) then "else" els
+  //  "for" ( init; cond; inc ) body
   struct Node *cond;
   struct Node *then;
   struct Node *els;
-
-  // Function definition
+  struct Node *init;
+  struct Node *inc;
   struct Node *body;
 
   // Function call
   Vector *args;
 } Node;
 
-Vector *parse(Vector *tokens_);
+Vector *parse(Vector *tokens);
 
 /// gen_ir.c
 
@@ -122,6 +127,7 @@ enum {
   IR_RETURN,
   IR_CALL,
   IR_LABEL,
+  IR_LT,
   IR_JMP,
   IR_UNLESS,
   IR_LOAD,
@@ -173,6 +179,7 @@ void dump_ir(Vector *irv);
 /// regalloc.c
 
 extern char *regs[];
+extern char *regs8[];
 void alloc_regs(Vector *irv);
 
 /// gen_x86.c

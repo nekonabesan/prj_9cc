@@ -90,14 +90,32 @@ static Node *add() {
   }
 }
 
-static Node *logand() {
+static Node *rel() {
   Node *lhs = add();
+  for (;;) {
+    Token *t = tokens->data[pos];
+    if (t->ty == '<') {
+      pos++;
+      lhs = new_node('<', lhs, add());
+      continue;
+    }
+    if (t->ty == '>') {
+      pos++;
+      lhs = new_node('<', add(), lhs);
+      continue;
+    }
+    return lhs;
+  }
+}
+
+static Node *logand() {
+  Node *lhs = rel();
   for (;;) {
     Token *t = tokens->data[pos];
     if (t->ty != TK_LOGAND)
       return lhs;
     pos++;
-    lhs = new_node(ND_LOGAND, lhs, add());
+    lhs = new_node(ND_LOGAND, lhs, rel());
   }
 }
 
@@ -124,6 +142,19 @@ static Node *stmt() {
   Token *t = tokens->data[pos];
 
   switch (t->ty) {
+  case TK_INT: {
+    pos++;
+    node->ty = ND_VARDEF;
+
+    t = tokens->data[pos];
+    if (t->ty != TK_IDENT)
+      error("variable name expected, but got %s", t->input);
+    node->name = t->name;
+    pos++;
+
+    expect(';');
+    return node;
+  }
   case TK_IF:
     pos++;
     node->ty = ND_IF;
@@ -136,11 +167,30 @@ static Node *stmt() {
     if (consume(TK_ELSE))
       node->els = stmt();
     return node;
+  case TK_FOR:
+    pos++;
+    node->ty = ND_FOR;
+    expect('(');
+    node->init = assign();
+    expect(';');
+    node->cond = assign();
+    expect(';');
+    node->inc = assign();
+    expect(')');
+    node->body = stmt();
+    return node;
   case TK_RETURN:
     pos++;
     node->ty = ND_RETURN;
     node->expr = assign();
     expect(';');
+    return node;
+  case '{':
+    pos++;
+    node->ty = ND_COMP_STMT;
+    node->stmts = new_vec();
+    while (!consume('}'))
+      vec_push(node->stmts, stmt());
     return node;
   default:
     node->ty = ND_EXPR_STMT;
@@ -166,6 +216,11 @@ static Node *function() {
   node->args = new_vec();
 
   Token *t = tokens->data[pos];
+  if (t->ty != TK_INT)
+    error("function return type expected, but got %s", t->input);
+  pos++;
+
+  t = tokens->data[pos];
   if (t->ty != TK_IDENT)
     error("function name expected, but got %s", t->input);
   node->name = t->name;
