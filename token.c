@@ -13,8 +13,8 @@ static struct {
   char *name;
   int ty;
 } symbols[] = {
-  {"else", TK_ELSE}, {"for", TK_FOR}, {"if", TK_IF}, {"return", TK_RETURN},
-  {"&&", TK_LOGAND}, {"||", TK_LOGOR}, {NULL, 0},
+  {"else", TK_ELSE},  {"for", TK_FOR}, {"if", TK_IF}, {"int", TK_INT},
+  {"return", TK_RETURN}, {"&&", TK_LOGAND}, {"||", TK_LOGOR}, {NULL, 0},
 };
 
 // Tokenized input is stored to this array.
@@ -43,7 +43,7 @@ loop:
     for (int i = 0; symbols[i].name; i++) {
       char *name = symbols[i].name;
       int len = strlen(name);
-      if(strncmp(p, name, len))
+      if (strncmp(p, name, len))
         continue;
 
       add_token(v, symbols[i].ty, p);

@@ -52,7 +52,8 @@ void util_test();
 enum {
   TK_NUM = 256, // Number literal
   TK_IDENT,     // Identifier
-  TK_IF,        // "If"
+  TK_INT,       // "int"
+  TK_IF,        // "if"
   TK_ELSE,      // "else"
   TK_FOR,       // "for"
   TK_LOGOR,     // ||
@@ -76,6 +77,7 @@ Vector *tokenize(char *p);
 enum {
   ND_NUM = 256, // Number literal
   ND_IDENT,     // Identifier
+  ND_VARDEF,    // Variable definition
   ND_IF,        // "if"
   ND_FOR,       // "for"
   ND_LOGAND,    // &&
@@ -110,7 +112,7 @@ typedef struct Node {
   Vector *args;
 } Node;
 
-Vector *parse(Vector *tokens_);
+Vector *parse(Vector *tokens);
 
 /// gen_ir.c
 
