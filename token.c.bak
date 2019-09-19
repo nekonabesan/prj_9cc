@@ -1,5 +1,7 @@
 #include "9cc.h"
 
+Map *keywords;
+
 // Tokenizer
 static Token *add_token(Vector *v, int ty, char *input) {
   Token *t = malloc(sizeof(Token));
@@ -9,21 +11,11 @@ static Token *add_token(Vector *v, int ty, char *input) {
   return t;
 }
 
-static struct {
-  char *name;
-  int ty;
-} symbols[] = {
-  {"else", TK_ELSE},  {"for", TK_FOR}, {"if", TK_IF}, {"int", TK_INT},
-  {"return", TK_RETURN}, {"&&", TK_LOGAND}, {"||", TK_LOGOR}, {NULL, 0},
-};
-
 // Tokenized input is stored to this array.
 static Vector *scan(char *p) {
   Vector *v = new_vec();
 
   int i = 0;
-
-loop:
   while (*p) {
     // Skip whitespace
     if (isspace(*p)) {
@@ -32,24 +24,11 @@ loop:
     }
 
     // Single-letter token
-    if (strchr("+-*/;=(),{}<>", *p)) {
+    if (strchr("+-*/;=", *p)) {
       add_token(v, *p, p);
       i++;
       p++;
       continue;
-    }
-
-    // Multi-letter token
-    for (int i = 0; symbols[i].name; i++) {
-      char *name = symbols[i].name;
-      int len = strlen(name);
-      if (strncmp(p, name, len))
-        continue;
-
-      add_token(v, symbols[i].ty, p);
-      i++;
-      p += len;
-      goto loop;
     }
 
     // Identifier
@@ -58,8 +37,13 @@ loop:
       while (isalpha(p[len]) || isdigit(p[len]) || p[len] == '_')
         len++;
 
-      Token *t = add_token(v, TK_IDENT, p);
-      t->name = strndup(p, len);
+      char *name = strndup(p, len);
+      int ty = (intptr_t)map_get(keywords, name);
+      if (!ty)
+        ty = TK_IDENT;
+
+      Token *t = add_token(v, ty, p);
+      t->name = name;
       i++;
       p += len;
       continue;
@@ -80,4 +64,9 @@ loop:
   return v;
 }
 
-Vector *tokenize(char *p) { return scan(p); }
+Vector *tokenize(char *p) {
+  keywords = new_map();
+  map_put(keywords, "return", (void *)TK_RETURN);
+
+  return scan(p);
+}
