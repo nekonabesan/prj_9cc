@@ -1,6 +1,5 @@
 #include "9cc.h"
 
-
 noreturn void error(char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
@@ -27,9 +26,10 @@ Vector *new_vec() {
 }
 
 void vec_push(Vector *v, void *elem) {
-  if (v->len == v->capacity)
+  if (v->len == v->capacity) {
     v->capacity *= 2;
     v->data = realloc(v->data, sizeof(void *) * v->capacity);
+  }
   v->data[v->len++] = elem;
 }
 
@@ -87,4 +87,28 @@ char *sb_get(StringBuilder *sb) {
   sb_grow(sb, 1);
   sb->data[sb->len] = '\0';
   return sb->data;
+}
+
+Type *ptr_of(Type *base) {
+  Type *ty = calloc(1, sizeof(Type));
+  ty->ty = PTR;
+  ty->ptr_of = base;
+  return ty;
+}
+
+Type *ary_of(Type *base, int len) {
+  Type *ty = calloc(1, sizeof(Type));
+  ty->ty = ARY;
+  ty->ary_of = base;
+  ty->len = len;
+  return ty;
+}
+
+int size_of(Type *ty) {
+  if (ty->ty == INT)
+    return 4;
+  if (ty->ty == ARY)
+    return size_of(ty->ary_of) * ty->len;
+  assert(ty->ty == PTR);
+  return 8;
 }
