@@ -36,7 +36,7 @@ loop:
       continue;
     }
 
-    // Multi-letter token
+    // Multi-letter symbol or keyword
     for (int i = 0; symbols[i].name; i++) {
       char *name = symbols[i].name;
       int len = strlen(name);
