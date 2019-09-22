@@ -46,12 +46,12 @@ char *sb_get(StringBuilder *sb);
 typedef struct Type {
   int ty;
 
-   // pointer
-   struct Type *ptr_of;
+  // Pointer
+  struct Type *ptr_of;
 
-   // Array
-   struct Type *ary_of;
-   int len;
+  // Array
+  struct Type *ary_of;
+  int len;
 } Type;
 
 Type *ptr_of(Type *base);
@@ -74,6 +74,7 @@ enum {
   TK_LOGOR,     // ||
   TK_LOGAND,    // &&
   TK_RETURN,    // "return"
+  TK_SIZEOF,    // "sizeof"
   TK_EOF,       // End marker
 };
 
@@ -101,6 +102,7 @@ enum {
   ND_LOGAND,    // &&
   ND_LOGOR,     // ||
   ND_RETURN,    // "return"
+  ND_SIZEOF,    // "sizeof"
   ND_CALL,      // Function call
   ND_FUNC,      // Function definition
   ND_COMP_STMT, // Compound statement
@@ -118,7 +120,7 @@ typedef struct Node {
   Type *ty;          // C type
   struct Node *lhs;  // left-hand side
   struct Node *rhs;  // right-hand side
-  int val;           // Number litelal
+  int val;           // Number literal
   struct Node *expr; // "return" or expression stmt
   Vector *stmts;     // Compound statement
 
