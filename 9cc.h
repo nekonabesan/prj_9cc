@@ -43,6 +43,21 @@ StringBuilder *new_sb(void);
 void sb_append(StringBuilder *sb, char *s);
 char *sb_get(StringBuilder *sb);
 
+typedef struct Type {
+  int ty;
+
+  // Pointer
+  struct Type *ptr_of;
+
+  // Array
+  struct Type *ary_of;
+  int len;
+} Type;
+
+Type *ptr_of(Type *base);
+Type *ary_of(Type *base, int len);
+int size_of(Type *ty);
+
 /// util_test.c
 
 void util_test();
@@ -59,6 +74,7 @@ enum {
   TK_LOGOR,     // ||
   TK_LOGAND,    // &&
   TK_RETURN,    // "return"
+  TK_SIZEOF,    // "sizeof"
   TK_EOF,       // End marker
 };
 
@@ -78,22 +94,33 @@ enum {
   ND_NUM = 256, // Number literal
   ND_IDENT,     // Identifier
   ND_VARDEF,    // Variable definition
+  ND_LVAR,      // Variable reference
   ND_IF,        // "if"
   ND_FOR,       // "for"
+  ND_ADDR,      // address-of operator ("&")
+  ND_DEREF,     // pointer dereference ("*")
   ND_LOGAND,    // &&
   ND_LOGOR,     // ||
   ND_RETURN,    // "return"
+  ND_SIZEOF,    // "sizeof"
   ND_CALL,      // Function call
   ND_FUNC,      // Function definition
   ND_COMP_STMT, // Compound statement
   ND_EXPR_STMT, // Expressions statement
 };
 
+enum {
+  INT,
+  PTR,
+  ARY,
+};
+
 typedef struct Node {
-  int ty;            // Node type
+  int op;            // Node type
+  Type *ty;          // C type
   struct Node *lhs;  // left-hand side
   struct Node *rhs;  // right-hand side
-  int val;           // Number litelal
+  int val;           // Number literal
   struct Node *expr; // "return" or expression stmt
   Vector *stmts;     // Compound statement
 
@@ -108,11 +135,21 @@ typedef struct Node {
   struct Node *inc;
   struct Node *body;
 
+  // Function definition
+  int stacksize;
+
+  // Local variable
+  int offset;
+
   // Function call
   Vector *args;
 } Node;
 
 Vector *parse(Vector *tokens);
+int size_of(Type *ty);
+
+/// sama.c
+void sema(Vector *nodes);
 
 /// gen_ir.c
 
@@ -130,10 +167,13 @@ enum {
   IR_LT,
   IR_JMP,
   IR_UNLESS,
-  IR_LOAD,
-  IR_STORE,
+  IR_LOAD32,
+  IR_LOAD64,
+  IR_STORE32,
+  IR_STORE64,
+  IR_STORE32_ARG,
+  IR_STORE64_ARG,
   IR_KILL,
-  IR_SAVE_ARGS,
   IR_NOP,
 };
 
@@ -156,6 +196,7 @@ enum {
   IR_TY_LABEL,
   IR_TY_REG_REG,
   IR_TY_REG_IMM,
+  IR_TY_IMM_IMM,
   IR_TY_REG_LABEL,
   IR_TY_CALL,
 };
@@ -180,6 +221,8 @@ void dump_ir(Vector *irv);
 
 extern char *regs[];
 extern char *regs8[];
+extern char *regs32[];
+
 void alloc_regs(Vector *irv);
 
 /// gen_x86.c

@@ -1,7 +1,8 @@
 #include "9cc.h"
 
 char *regs[] = {"rbp", "r10", "r11", "rbx", "r12", "r13", "r14", "r15"};
-char *regs8[] = {"bp1", "r10b", "r11b", "b1", "r12b", "r13b", "r14b", "r15b"};
+char *regs8[] = {"bpl", "r10b", "r11b", "bl", "r12b", "r13b", "r14b", "r15b"};
+char *regs32[] = {"ebp", "r10d", "r11d", "ebx", "r12d", "r13d", "r14d", "r15d"};
 
 static bool used[sizeof(regs) / sizeof(*regs)];
 static int *reg_map;
@@ -23,13 +24,8 @@ static int alloc(int ir_reg) {
   error("register exhausted");
 }
 
-static void kill(int r) {
-  assert(used[r]);
-  used[r] = false;
-}
-
 static void visit(Vector *irv) {
-  // r0 is a resserved register that is always mapped to rbp.
+  // r0 is a reserved register that is always mapped to rbp.
   reg_map[0] = 0;
   used[0] = true;
 
@@ -54,7 +50,8 @@ static void visit(Vector *irv) {
     }
 
     if (ir->op == IR_KILL) {
-      kill(ir->lhs);
+      assert(used[ir->lhs]);
+      used[ir->lhs] = false;
       ir->op = IR_NOP;
     }
   }

@@ -2,6 +2,7 @@
 
 static Vector *tokens;
 static int pos;
+static Type int_ty = {INT, NULL};
 
 static Node *assign();
 
@@ -20,15 +21,27 @@ static bool consume(int ty) {
   return true;
 }
 
-static Node *new_node(int op, Node *lhs, Node *rhs) {
+static bool is_typename() {
+  Token *t = tokens->data[pos];
+  return t->ty == TK_INT;
+}
+
+static Node *new_binop(int op, Node *lhs, Node *rhs) {
   Node *node = calloc(1, sizeof(Node));
-  node->ty = op;
+  node->op = op;
   node->lhs = lhs;
   node->rhs = rhs;
   return node;
 }
 
-static Node *term() {
+static Node *new_expr(int op, Node *expr) {
+  Node *node = calloc(1, sizeof(Node));
+  node->op = op;
+  node->expr = expr;
+  return node;
+}
+
+static Node *primary() {
   Token *t = tokens->data[pos++];
 
   if (t->ty == '(') {
@@ -40,7 +53,8 @@ static Node *term() {
   Node *node = calloc(1, sizeof(Node));
 
   if (t->ty == TK_NUM) {
-    node->ty = ND_NUM;
+    node->ty = &int_ty;
+    node->op = ND_NUM;
     node->val = t->val;
     return node;
   }
@@ -49,11 +63,11 @@ static Node *term() {
     node->name = t->name;
 
     if (!consume('(')) {
-      node->ty = ND_IDENT;
+      node->op = ND_IDENT;
       return node;
     }
 
-    node->ty = ND_CALL;
+    node->op = ND_CALL;
     node->args = new_vec();
     if (consume(')'))
       return node;
@@ -68,14 +82,39 @@ static Node *term() {
   error("number expected, but got %s", t->input);
 }
 
+static Node *mul();
+
+static Node *postfix() {
+  Node *lhs = primary();
+  while (consume('[')) {
+    lhs = new_expr(ND_DEREF, new_binop('+', lhs, primary()));
+    expect(']');
+  }
+  return lhs;
+}
+
+static Node *unary() {
+  if (consume('*')) {
+    return new_expr(ND_DEREF, mul());
+  }
+  if (consume('&')) {
+    Node *node = calloc(1, sizeof(Node));
+    return new_expr(ND_ADDR, mul());
+  }
+  if (consume(TK_SIZEOF)) {
+    return new_expr(ND_SIZEOF, unary());
+  }
+  return postfix();
+}
+
 static Node *mul() {
-  Node *lhs = term();
+  Node *lhs = unary();
   for (;;) {
     Token *t = tokens->data[pos];
     if (t->ty != '*' && t->ty != '/')
       return lhs;
     pos++;
-    lhs = new_node(t->ty, lhs, term());
+    lhs = new_binop(t->ty, lhs, unary());
   }
 }
 
@@ -86,7 +125,7 @@ static Node *add() {
     if (t->ty != '+' && t->ty != '-')
       return lhs;
     pos++;
-    lhs = new_node(t->ty, lhs, mul());
+    lhs = new_binop(t->ty, lhs, mul());
   }
 }
 
@@ -96,12 +135,12 @@ static Node *rel() {
     Token *t = tokens->data[pos];
     if (t->ty == '<') {
       pos++;
-      lhs = new_node('<', lhs, add());
+      lhs = new_binop('<', lhs, add());
       continue;
     }
     if (t->ty == '>') {
       pos++;
-      lhs = new_node('<', add(), lhs);
+      lhs = new_binop('<', add(), lhs);
       continue;
     }
     return lhs;
@@ -115,7 +154,7 @@ static Node *logand() {
     if (t->ty != TK_LOGAND)
       return lhs;
     pos++;
-    lhs = new_node(ND_LOGAND, lhs, rel());
+    lhs = new_binop(ND_LOGAND, lhs, rel());
   }
 }
 
@@ -126,15 +165,86 @@ static Node *logor() {
     if (t->ty != TK_LOGOR)
       return lhs;
     pos++;
-    lhs = new_node(ND_LOGOR, lhs, logand());
+    lhs = new_binop(ND_LOGOR, lhs, logand());
   }
 }
 
 static Node *assign() {
   Node *lhs = logor();
   if (consume('='))
-    return new_node('=', lhs, logor());
+    return new_binop('=', lhs, logor());
   return lhs;
+}
+
+static Type *type() {
+  Token *t = tokens->data[pos];
+  if (t->ty != TK_INT)
+    error("typename expected, but got %s", t->input);
+  pos++;
+
+  Type *ty = &int_ty;
+  while (consume('*'))
+    ty = ptr_of(ty);
+  return ty;
+}
+
+static Type *read_array(Type *ty) {
+  Vector *v = new_vec();
+  while (consume('[')) {
+    Node *len = primary();
+    if (len->op != ND_NUM)
+      error("number expected");
+    vec_push(v, len);
+    expect(']');
+  }
+  for (int i = v->len - 1; i >= 0; i--) {
+    Node *len = v->data[i];
+    ty = ary_of(ty, len->val);
+  }
+  return ty;
+}
+
+static Node *decl() {
+  Node *node = calloc(1, sizeof(Node));
+  node->op = ND_VARDEF;
+
+  // Read the first half of type name (e.g. `int *`).
+  node->ty = type();
+
+  // Read an identifier.
+  Token *t = tokens->data[pos];
+  if (t->ty != TK_IDENT)
+    error("variable name expected, but got %s", t->input);
+  node->name = t->name;
+  pos++;
+
+  // Read the second half of type name (e.g. `[3][5]`).
+  node->ty = read_array(node->ty);
+
+  // Read an initializer.
+  if (consume('='))
+    node->init = assign();
+  expect(';');
+  return node;
+}
+
+static Node *param() {
+  Node *node = calloc(1, sizeof(Node));
+  node->op = ND_VARDEF;
+  node->ty = type();
+
+  Token *t = tokens->data[pos];
+  if (t->ty != TK_IDENT)
+    error("parameter name expected, but got %s", t->input);
+  node->name = t->name;
+  pos++;
+  return node;
+}
+
+static Node *expr_stmt() {
+  Node *node = new_expr(ND_EXPR_STMT, assign());
+  expect(';');
+  return node;
 }
 
 static Node *stmt() {
@@ -142,22 +252,11 @@ static Node *stmt() {
   Token *t = tokens->data[pos];
 
   switch (t->ty) {
-  case TK_INT: {
-    pos++;
-    node->ty = ND_VARDEF;
-
-    t = tokens->data[pos];
-    if (t->ty != TK_IDENT)
-      error("variable name expected, but got %s", t->input);
-    node->name = t->name;
-    pos++;
-
-    expect(';');
-    return node;
-  }
+  case TK_INT:
+    return decl();
   case TK_IF:
     pos++;
-    node->ty = ND_IF;
+    node->op = ND_IF;
     expect('(');
     node->cond = assign();
     expect(')');
@@ -169,10 +268,12 @@ static Node *stmt() {
     return node;
   case TK_FOR:
     pos++;
-    node->ty = ND_FOR;
+    node->op = ND_FOR;
     expect('(');
-    node->init = assign();
-    expect(';');
+    if (is_typename())
+      node->init = decl();
+    else
+      node->init = expr_stmt();
     node->cond = assign();
     expect(';');
     node->inc = assign();
@@ -181,28 +282,25 @@ static Node *stmt() {
     return node;
   case TK_RETURN:
     pos++;
-    node->ty = ND_RETURN;
+    node->op = ND_RETURN;
     node->expr = assign();
     expect(';');
     return node;
   case '{':
     pos++;
-    node->ty = ND_COMP_STMT;
+    node->op = ND_COMP_STMT;
     node->stmts = new_vec();
     while (!consume('}'))
       vec_push(node->stmts, stmt());
     return node;
   default:
-    node->ty = ND_EXPR_STMT;
-    node->expr = assign();
-    expect(';');
-    return node;
+    return expr_stmt();
   }
 }
 
 static Node *compound_stmt() {
   Node *node = calloc(1, sizeof(Node));
-  node->ty = ND_COMP_STMT;
+  node->op = ND_COMP_STMT;
   node->stmts = new_vec();
 
   while (!consume('}'))
@@ -212,7 +310,7 @@ static Node *compound_stmt() {
 
 static Node *function() {
   Node *node = calloc(1, sizeof(Node));
-  node->ty = ND_FUNC;
+  node->op = ND_FUNC;
   node->args = new_vec();
 
   Token *t = tokens->data[pos];
@@ -228,9 +326,9 @@ static Node *function() {
 
   expect('(');
   if (!consume(')')) {
-    vec_push(node->args, term());
+    vec_push(node->args, param());
     while (consume(','))
-      vec_push(node->args, term());
+      vec_push(node->args, param());
     expect(')');
   }
 
