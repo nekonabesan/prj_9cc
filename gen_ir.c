@@ -191,11 +191,11 @@ static int gen_expr(Node *node) {
   case ND_DEREF: {
     int r = gen_expr(node->expr);
     if (node->expr->ty->ptr_of->ty == CHAR)
-      add(IR_LOAD8, r,r);
+      add(IR_LOAD8, r, r);
     else if (node->expr->ty->ptr_of->ty == INT)
-      add(IR_LOAD32, r,r);
+      add(IR_LOAD32, r, r);
     else
-      add(IR_LOAD64, r,r);
+      add(IR_LOAD64, r, r);
     return r;
   }
   case '=': {

@@ -28,7 +28,7 @@ void gen(Function *fn) {
   printf(".data\n");
   for (int i = 0; i < fn->globals->len; i++) {
     Var *var = fn->globals->data[i];
-    printf("%s\n", var->name);
+    printf("%s:\n", var->name);
     printf("  .ascii \"%s\"\n", escape(var->data, var->len));
   }
 
@@ -106,7 +106,6 @@ void gen(Function *fn) {
       break;
     case IR_STORE8:
       printf("  mov [%s], %s\n", regs[ir->lhs], regs8[ir->rhs]);
-      break;
     case IR_STORE32:
       printf("  mov [%s], %s\n", regs[ir->lhs], regs32[ir->rhs]);
       break;
