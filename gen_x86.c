@@ -2,8 +2,27 @@
 
 static int label;
 
+const char *argreg8[] = {"dil", "sil", "dl", "cl", "r8b", "r9b"};
 const char *argreg32[] = {"edi", "esi", "edx", "ecx", "r8d", "r9d"};
 const char *argreg64[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
+
+static char *escape(char *s, int len) {
+  char *buf = malloc(len * 4);
+  char *p = buf;
+  for (int i = 0; i < len; i++) {
+    if (s[i] == '\\') {
+      *p++ = '\\';
+      *p++ = '\\';
+    } else if (isgraph(s[i]) || s[i] == ' ') {
+      *p++ = s[i];
+    } else {
+      sprintf(p, "\\%03o", s[i]);
+      p += 4;
+    }
+  }
+  *p = '\0';
+  return buf;
+}
 
 void gen(Function *fn) {
   char *ret = format(".Lend%d", label++);
@@ -52,6 +71,9 @@ void gen(Function *fn) {
     case IR_LABEL:
       printf(".L%d:\n", ir->lhs);
       break;
+    case IR_LABEL_ADDR:
+      printf("  lea %s, %s\n", regs[ir->lhs], ir->name);
+      break;
     case IR_LT:
       printf("  cmp %s, %s\n", regs[ir->lhs], regs[ir->rhs]);
       printf("  setl %s\n", regs8[ir->lhs]);
@@ -64,17 +86,26 @@ void gen(Function *fn) {
       printf("  cmp %s, 0\n", regs[ir->lhs]);
       printf("  je .L%d\n", ir->rhs);
       break;
+    case IR_LOAD8:
+      printf("  mov %s, [%s]\n", regs8[ir->lhs], regs[ir->rhs]);
+      printf("  movzb %s, %s\n", regs[ir->lhs], regs8[ir->lhs]);
+      break;
     case IR_LOAD32:
       printf("  mov %s, [%s]\n", regs32[ir->lhs], regs[ir->rhs]);
       break;
     case IR_LOAD64:
       printf("  mov %s, [%s]\n", regs[ir->lhs], regs[ir->rhs]);
       break;
+    case IR_STORE8:
+      printf("  mov [%s], %s\n", regs[ir->lhs], regs8[ir->rhs]);
     case IR_STORE32:
       printf("  mov [%s], %s\n", regs[ir->lhs], regs32[ir->rhs]);
       break;
     case IR_STORE64:
       printf("  mov [%s], %s\n", regs[ir->lhs], regs[ir->rhs]);
+      break;
+    case IR_STORE8_ARG:
+      printf("  mov [rbp-%d], %s\n", ir->lhs, argreg8[ir->rhs]);
       break;
     case IR_STORE32_ARG:
       printf("  mov [rbp-%d], %s\n", ir->lhs, argreg32[ir->rhs]);
@@ -116,9 +147,17 @@ void gen(Function *fn) {
   printf("  ret\n");
 }
 
-void gen_x86(Vector *fns) {
+void gen_x86(Vector *globals, Vector *fns) {
   printf(".intel_syntax noprefix\n");
 
+  printf(".data\n");
+  for (int i = 0; i < globals->len; i++) {
+    Var *var = globals->data[i];
+    printf("%s:\n", var->name);
+    printf("  .ascii \"%s\"\n", escape(var->data, var->len));
+  }
+
+  printf(".text\n");
   for (int i = 0; i < fns->len; i++)
     gen(fns->data[i]);
 }

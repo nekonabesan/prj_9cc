@@ -69,7 +69,7 @@ try 5 'int main() { return plus(2, 3); }'
 try 1 'int one() { return 1; } int main() { return one(); }'
 try 3 'int one() { return 1; } int two() { return 2; } int main() { return one()+two(); }'
 try 6 'int mul(int a, int b) { return a * b; } int main() { return mul(2, 3); }'
-try 21 'int add(int a,int b,int c,int d,int e,int f) { return a+b+c+d+e+f; } int main() { return add(1,2,3,4,5,6); }'
+try 21 'int add(int a, int b, int c, int d, int e, int f) { return a+b+c+d+e+f; } int main() { return add(1,2,3,4,5,6); }'
 
 try 0 'int main() { return 0||0; }'
 try 1 'int main() { return 1||0; }'
@@ -77,8 +77,8 @@ try 1 'int main() { return 0||1; }'
 try 1 'int main() { return 1||1; }'
 
 try 0 'int main() { return 0&&0; }'
-try 0 'int main() { return 0&&1; }'
 try 0 'int main() { return 1&&0; }'
+try 0 'int main() { return 0&&1; }'
 try 1 'int main() { return 1&&1; }'
 
 try 0 'int main() { return 0<0; }'
@@ -98,11 +98,27 @@ try 2 'int main() { int **p = alloc_ptr_ptr(2); return **p; }'
 try 3 'int main() { int ary[2]; *ary=1; *(ary+1)=2; return *ary + *(ary+1);}'
 try 5 'int main() { int x; int *p = &x; x = 5; return *p;}'
 
-try 3 'int main() { int ary[2]; ary[0]=1; ary[1]=2; return ary[0] + ary[1]; }'
-try 5 'int main() { int x; int *p = &x; x = 5; return p[0]; }'
+try 3 'int main() { int ary[2]; ary[0]=1; ary[1]=2; return ary[0] + ary[0+1];}'
+try 5 'int main() { int x; int *p = &x; x = 5; return p[0];}'
 
+try 1 'int main() { char x; return sizeof x; }'
 try 4 'int main() { int x; return sizeof(x); }'
-try 8 'int main() { int *x; return sizeof(x); }'
-try 16 'int main() { int x[4]; return sizeof(x); }'
+try 8 'int main() { int *x; return sizeof x; }'
+try 16 'int main() { int x[4]; return sizeof x; }'
+
+try 5 'int main() { char x = 5; return x; }'
+try 42 'int main() { int x = 0; char *p = &x; p[0] = 42; return x; }'
+
+try 97 'int main() { char *p = "abc"; return p[0]; }'
+try 98 'int main() { char *p = "abc"; return p[1]; }'
+try 99 'int main() { char *p = "abc"; return p[2]; }'
+try 0 'int main() { char *p = "abc"; return p[3]; }'
+
+try 1 'int main() { int x = 1; { int x = 2; } return x; }'
+
+try 0 'int x; int main() { return x; }'
+try 5 'int x; int main() { x = 5; return x; }'
+try 20 'int x[5]; int main() { return sizeof(x); }'
+try 15 'int x[5]; int main() { x[0] = 5; x[4] = 10; return x[0] + x[4]; }'
 
 echo OK

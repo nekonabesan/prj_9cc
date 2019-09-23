@@ -3,6 +3,7 @@
 static Vector *tokens;
 static int pos;
 static Type int_ty = {INT, NULL};
+static Type char_ty = {CHAR, NULL};
 
 static Node *assign();
 
@@ -21,9 +22,13 @@ static bool consume(int ty) {
   return true;
 }
 
-static bool is_typename() {
+static Type *get_type() {
   Token *t = tokens->data[pos];
-  return t->ty == TK_INT;
+  if (t->ty == TK_INT)
+    return &int_ty;
+  if (t->ty == TK_CHAR)
+    return &char_ty;
+  return NULL;
 }
 
 static Node *new_binop(int op, Node *lhs, Node *rhs) {
@@ -59,6 +64,14 @@ static Node *primary() {
     return node;
   }
 
+  if (t->ty == TK_STR) {
+    node->ty = ary_of(&char_ty, strlen(t->str));
+    node->op = ND_STR;
+    node->data = t->str;
+    node->len = strlen(t->str) + 1;
+    return node;
+  }
+
   if (t->ty == TK_IDENT) {
     node->name = t->name;
 
@@ -87,23 +100,19 @@ static Node *mul();
 static Node *postfix() {
   Node *lhs = primary();
   while (consume('[')) {
-    lhs = new_expr(ND_DEREF, new_binop('+', lhs, primary()));
+    lhs = new_expr(ND_DEREF, new_binop('+', lhs, assign()));
     expect(']');
   }
   return lhs;
 }
 
 static Node *unary() {
-  if (consume('*')) {
+  if (consume('*'))
     return new_expr(ND_DEREF, mul());
-  }
-  if (consume('&')) {
-    Node *node = calloc(1, sizeof(Node));
+  if (consume('&'))
     return new_expr(ND_ADDR, mul());
-  }
-  if (consume(TK_SIZEOF)) {
+  if (consume(TK_SIZEOF))
     return new_expr(ND_SIZEOF, unary());
-  }
   return postfix();
 }
 
@@ -178,11 +187,11 @@ static Node *assign() {
 
 static Type *type() {
   Token *t = tokens->data[pos];
-  if (t->ty != TK_INT)
+  Type *ty = get_type();
+  if (!ty)
     error("typename expected, but got %s", t->input);
   pos++;
 
-  Type *ty = &int_ty;
   while (consume('*'))
     ty = ptr_of(ty);
   return ty;
@@ -253,6 +262,7 @@ static Node *stmt() {
 
   switch (t->ty) {
   case TK_INT:
+  case TK_CHAR:
     return decl();
   case TK_IF:
     pos++;
@@ -270,7 +280,7 @@ static Node *stmt() {
     pos++;
     node->op = ND_FOR;
     expect('(');
-    if (is_typename())
+    if (get_type())
       node->init = decl();
     else
       node->init = expr_stmt();
@@ -308,32 +318,47 @@ static Node *compound_stmt() {
   return node;
 }
 
-static Node *function() {
-  Node *node = calloc(1, sizeof(Node));
-  node->op = ND_FUNC;
-  node->args = new_vec();
-
-  Token *t = tokens->data[pos];
-  if (t->ty != TK_INT)
-    error("function return type expected, but got %s", t->input);
-  pos++;
-
-  t = tokens->data[pos];
-  if (t->ty != TK_IDENT)
-    error("function name expected, but got %s", t->input);
-  node->name = t->name;
-  pos++;
-
-  expect('(');
-  if (!consume(')')) {
-    vec_push(node->args, param());
-    while (consume(','))
-      vec_push(node->args, param());
-    expect(')');
+static Node *toplevel() {
+  Type *ty = type();
+  if (!ty) {
+    Token *t = tokens->data[pos];
+    error("typename expected, but got %s", t->input);
   }
 
-  expect('{');
-  node->body = compound_stmt();
+  Token *t = tokens->data[pos];
+  if (t->ty != TK_IDENT)
+    error("function or variable name expected, but got %s", t->input);
+  char *name = t->name;
+  pos++;
+
+  // Function
+  if (consume('(')) {
+    Node *node = calloc(1, sizeof(Node));
+    node->op = ND_FUNC;
+    node->ty = ty;
+    node->name = name;
+    node->args = new_vec();
+
+    if (!consume(')')) {
+      vec_push(node->args, param());
+      while (consume(','))
+        vec_push(node->args, param());
+      expect(')');
+    }
+
+    expect('{');
+    node->body = compound_stmt();
+    return node;
+  }
+
+  // Global variable
+  Node *node = calloc(1, sizeof(Node));
+  node->op = ND_VARDEF;
+  node->ty = read_array(ty);
+  node->name = name;
+  node->data = calloc(1, size_of(node->ty));
+  node->len = size_of(node->ty);
+  expect(';');
   return node;
 };
 
@@ -343,6 +368,6 @@ Vector *parse(Vector *tokens_) {
 
   Vector *v = new_vec();
   while (((Token *)tokens->data[pos])->ty != TK_EOF)
-    vec_push(v, function());
+    vec_push(v, toplevel());
   return v;
 }

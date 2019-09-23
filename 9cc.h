@@ -66,8 +66,10 @@ void util_test();
 
 enum {
   TK_NUM = 256, // Number literal
+  TK_STR,       // String literal
   TK_IDENT,     // Identifier
   TK_INT,       // "int"
+  TK_CHAR,      // "char"
   TK_IF,        // "if"
   TK_ELSE,      // "else"
   TK_FOR,       // "for"
@@ -82,6 +84,7 @@ enum {
 typedef struct {
   int ty;      // Token type
   int val;     // Number literal
+  char *str;   // String literal
   char *name;  // Identifier
   char *input; // Token string (for error reporting)
 } Token;
@@ -92,9 +95,11 @@ Vector *tokenize(char *p);
 
 enum {
   ND_NUM = 256, // Number literal
+  ND_STR,       // String literal
   ND_IDENT,     // Identifier
   ND_VARDEF,    // Variable definition
-  ND_LVAR,      // Variable reference
+  ND_LVAR,      // local variable reference
+  ND_GVAR,      // Global variable reference
   ND_IF,        // "if"
   ND_FOR,       // "for"
   ND_ADDR,      // address-of operator ("&")
@@ -111,6 +116,7 @@ enum {
 
 enum {
   INT,
+  CHAR,
   PTR,
   ARY,
 };
@@ -126,6 +132,10 @@ typedef struct Node {
 
   char *name;        // Identifire
 
+  // Global variable
+  char *data;
+  int len;
+
   // "if" ( cond ) then "else" els
   //  "for" ( init; cond; inc ) body
   struct Node *cond;
@@ -137,6 +147,7 @@ typedef struct Node {
 
   // Function definition
   int stacksize;
+  Vector *globals;
 
   // Local variable
   int offset;
@@ -149,7 +160,21 @@ Vector *parse(Vector *tokens);
 int size_of(Type *ty);
 
 /// sama.c
-void sema(Vector *nodes);
+
+typedef struct {
+  Type *ty;
+  bool is_local;
+
+  // Local
+  int offset;
+
+  // global
+  char *name;
+  char *data;
+  int len;
+} Var;
+
+Vector *sema(Vector *nodes);
 
 /// gen_ir.c
 
@@ -164,13 +189,17 @@ enum {
   IR_RETURN,
   IR_CALL,
   IR_LABEL,
+  IR_LABEL_ADDR,
   IR_LT,
   IR_JMP,
   IR_UNLESS,
+  IR_LOAD8,
   IR_LOAD32,
   IR_LOAD64,
+  IR_STORE8,
   IR_STORE32,
   IR_STORE64,
+  IR_STORE8_ARG,
   IR_STORE32_ARG,
   IR_STORE64_ARG,
   IR_KILL,
@@ -195,6 +224,7 @@ enum {
   IR_TY_JMP,
   IR_TY_LABEL,
   IR_TY_REG_REG,
+  IR_TY_LABEL_ADDR,
   IR_TY_REG_IMM,
   IR_TY_IMM_IMM,
   IR_TY_REG_LABEL,
@@ -209,12 +239,13 @@ typedef struct {
 typedef struct {
   char *name;
   int stacksize;
+  Vector *globals;
   Vector *ir;
 } Function;
 
 extern IRInfo irinfo[];
 
-Vector *gen_ir(Vector *nodes);
+Vector *gen_ir(Vector *fns);
 void dump_ir(Vector *irv);
 
 /// regalloc.c
@@ -226,4 +257,4 @@ extern char *regs32[];
 void alloc_regs(Vector *irv);
 
 /// gen_x86.c
-void gen_x86(Vector *fns);
+void gen_x86(Vector *globals, Vector *fns);

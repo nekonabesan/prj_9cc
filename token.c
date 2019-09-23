@@ -13,9 +13,11 @@ static struct {
   char *name;
   int ty;
 } symbols[] = {
-  {"else", TK_ELSE}, {"for", TK_FOR},       {"if", TK_IF},
-  {"int", TK_INT},   {"return", TK_RETURN}, {"sizeof", TK_SIZEOF},
-  {"&&", TK_LOGAND}, {"||", TK_LOGOR},      {NULL, 0},
+  {"char", TK_CHAR},     {"else", TK_ELSE},
+  {"for", TK_FOR},       {"if", TK_IF},
+  {"int", TK_INT},       {"return", TK_RETURN},
+  {"sizeof", TK_SIZEOF}, {"&&", TK_LOGAND},
+  {"||", TK_LOGOR},      {NULL, 0},
 };
 
 // Tokenized input is stored to this array.
@@ -27,6 +29,21 @@ loop:
     // Skip whitespace
     if (isspace(*p)) {
       p++;
+      continue;
+    }
+
+    // String literal
+    if (*p == '"') {
+      Token *t = add_token(v, TK_STR, p);
+      p++;
+
+      int len = 0;
+      while (p[len] && p[len] != '"')
+        len++;
+      if (!p[len])
+        error("premature end of input");
+      t->str = strndup(p, len);
+      p = p + len + 1;
       continue;
     }
 
