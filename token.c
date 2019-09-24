@@ -13,12 +13,50 @@ static struct {
   char *name;
   int ty;
 } symbols[] = {
-  {"char", TK_CHAR},     {"else", TK_ELSE},
-  {"for", TK_FOR},       {"if", TK_IF},
-  {"int", TK_INT},       {"return", TK_RETURN},
-  {"sizeof", TK_SIZEOF}, {"&&", TK_LOGAND},
-  {"||", TK_LOGOR},      {NULL, 0},
+  {"char", TK_CHAR},     {"do", TK_DO},
+  {"else", TK_ELSE},     {"for", TK_FOR},
+  {"if", TK_IF},         {"int", TK_INT},
+  {"return", TK_RETURN}, {"sizeof", TK_SIZEOF},
+  {"while", TK_WHILE},   {"&&", TK_LOGAND},
+  {"||", TK_LOGOR},      {"==", TK_EQ},
+  {"!=", TK_NE},         {NULL, 0},
 };
+
+static int read_string(StringBuilder *sb, char *p) {
+  char *start = p;
+
+  while (*p != '"') {
+    if (!*p)
+      error("premature end of input");
+
+    if (*p != '\\') {
+      sb_add(sb, *p++);
+      continue;
+    }
+
+    p++;
+    if (*p == 'a')
+      sb_add(sb, '\a');
+    else if (*p == 'b')
+      sb_add(sb, '\b');
+    else if (*p == 'f')
+      sb_add(sb, '\f');
+    else if (*p == 'n')
+      sb_add(sb, '\n');
+    else if (*p == 'r')
+      sb_add(sb, '\r');
+    else if (*p == 't')
+      sb_add(sb, '\t');
+    else if (*p == 'v')
+      sb_add(sb, '\v');
+    else if (*p == '\0')
+      error("PREMATURE end of input");
+    else
+      sb_add(sb, *p);
+    p++;
+  }
+  return p - start + 1;
+}
 
 // Tokenized input is stored to this array.
 Vector *tokenize(char *p) {
@@ -37,13 +75,10 @@ loop:
       Token *t = add_token(v, TK_STR, p);
       p++;
 
-      int len = 0;
-      while (p[len] && p[len] != '"')
-        len++;
-      if (!p[len])
-        error("premature end of input");
-      t->str = strndup(p, len);
-      p = p + len + 1;
+      StringBuilder *sb = new_sb();
+      p += read_string(sb, p);
+      t->str = sb_get(sb);
+      t->len = sb->len;
       continue;
     }
 

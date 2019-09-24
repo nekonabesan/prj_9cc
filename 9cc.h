@@ -40,6 +40,7 @@ typedef struct {
 } StringBuilder;
 
 StringBuilder *new_sb(void);
+void sb_add(StringBuilder *sb, char s);
 void sb_append(StringBuilder *sb, char *s);
 char *sb_get(StringBuilder *sb);
 
@@ -73,6 +74,10 @@ enum {
   TK_IF,        // "if"
   TK_ELSE,      // "else"
   TK_FOR,       // "for"
+  TK_DO,        // "do"
+  TK_WHILE,     // "while"
+  TK_EQ,        // ==
+  TK_NE,        // !-
   TK_LOGOR,     // ||
   TK_LOGAND,    // &&
   TK_RETURN,    // "return"
@@ -84,9 +89,12 @@ enum {
 typedef struct {
   int ty;      // Token type
   int val;     // Number literal
-  char *str;   // String literal
   char *name;  // Identifier
   char *input; // Token string (for error reporting)
+
+  // String literal
+  char *str;
+  char len;
 } Token;
 
 Vector *tokenize(char *p);
@@ -102,8 +110,11 @@ enum {
   ND_GVAR,      // Global variable reference
   ND_IF,        // "if"
   ND_FOR,       // "for"
+  ND_DO_WHILE,  //  do ~ while
   ND_ADDR,      // address-of operator ("&")
   ND_DEREF,     // pointer dereference ("*")
+  ND_EQ,        // ==
+  ND_NE,        // !=
   ND_LOGAND,    // &&
   ND_LOGOR,     // ||
   ND_RETURN,    // "return"
@@ -190,8 +201,11 @@ enum {
   IR_CALL,
   IR_LABEL,
   IR_LABEL_ADDR,
+  IR_EQ,
+  IR_NE,
   IR_LT,
   IR_JMP,
+  IR_IF,
   IR_UNLESS,
   IR_LOAD8,
   IR_LOAD32,

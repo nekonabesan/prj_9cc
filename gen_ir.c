@@ -12,6 +12,8 @@ IRInfo irinfo[] = {
       [IR_KILL] = {"KILL", IR_TY_REG},
       [IR_LABEL] = {"", IR_TY_LABEL},
       [IR_LABEL_ADDR] = {"LABEL_ADDR", IR_TY_LABEL_ADDR},
+      [IR_EQ] = {"EQ", IR_TY_REG_REG},
+      [IR_NE] = {"NE", IR_TY_REG_REG},
       [IR_LT] = {"LT", IR_TY_REG_REG},
       [IR_LOAD8] = {"LOAD8", IR_TY_REG_REG},
       [IR_LOAD32] = {"LOAD32", IR_TY_REG_REG},
@@ -28,6 +30,7 @@ IRInfo irinfo[] = {
       [IR_STORE64_ARG] = {"IR_STORE64_ARG", IR_TY_IMM_IMM},
       [IR_SUB] = {"SUB", IR_TY_REG_REG},
       [IR_SUB_IMM] = {"SUB", IR_TY_REG_IMM},
+      [IR_IF] = {"IF", IR_TY_REG_LABEL},
       [IR_UNLESS] = {"UNLESS", IR_TY_REG_LABEL},
 };
 
@@ -127,6 +130,20 @@ static int gen_expr(Node *node) {
     int r = nreg++;
     add(IR_IMM, r, node->val);
     return r;
+  }
+  case ND_EQ: {
+    int lhs = gen_expr(node->lhs);
+    int rhs = gen_expr(node->rhs);
+    add(IR_EQ, lhs, rhs);
+    kill(rhs);
+    return lhs;
+  }
+  case ND_NE: {
+    int lhs = gen_expr(node->lhs);
+    int rhs = gen_expr(node->rhs);
+    add(IR_NE, lhs, rhs);
+    kill(rhs);
+    return lhs;
   }
   case ND_LOGAND: {
     int x = nlabel++;
@@ -295,6 +312,16 @@ static void gen_stmt(Node *node) {
     add(IR_JMP, x, -1);
     label(y);
     return;
+  }
+
+  if (node->op == ND_DO_WHILE) {
+    int x = nlabel++;
+    label(x);
+    gen_stmt(node->body);
+    int r = gen_expr(node->cond);
+    add(IR_IF, r, x);
+    kill(r);
+    return; 
   }
 
   if (node->op == ND_RETURN) {

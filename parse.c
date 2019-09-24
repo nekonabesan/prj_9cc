@@ -68,7 +68,7 @@ static Node *primary() {
     node->ty = ary_of(&char_ty, strlen(t->str));
     node->op = ND_STR;
     node->data = t->str;
-    node->len = strlen(t->str) + 1;
+    node->len = t->len;
     return node;
   }
 
@@ -156,14 +156,32 @@ static Node *rel() {
   }
 }
 
-static Node *logand() {
+static Node *equality() {
   Node *lhs = rel();
+  for (;;) {
+    Token *t = tokens->data[pos];
+    if (t->ty == TK_EQ) {
+      pos++;
+      lhs = new_binop(ND_EQ, lhs, rel());
+      continue;
+    }
+    if (t->ty == TK_NE) {
+      pos++;
+      lhs = new_binop(ND_NE, lhs, rel());
+      continue;
+    }
+    return lhs;
+  }
+}
+
+static Node *logand() {
+  Node *lhs = equality();
   for (;;) {
     Token *t = tokens->data[pos];
     if (t->ty != TK_LOGAND)
       return lhs;
     pos++;
-    lhs = new_binop(ND_LOGAND, lhs, rel());
+    lhs = new_binop(ND_LOGAND, lhs, equality());
   }
 }
 
@@ -289,6 +307,16 @@ static Node *stmt() {
     node->inc = assign();
     expect(')');
     node->body = stmt();
+    return node;
+  case TK_DO:
+    pos++;
+    node->op = ND_DO_WHILE;
+    node->body = stmt();
+    expect(TK_WHILE);
+    expect('(');
+    node->cond = assign();
+    expect(')');
+    expect(';');
     return node;
   case TK_RETURN:
     pos++;
