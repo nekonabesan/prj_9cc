@@ -69,6 +69,7 @@ enum {
   TK_NUM = 256, // Number literal
   TK_STR,       // String literal
   TK_IDENT,     // Identifier
+  TK_EXTERN,    // "extern"
   TK_INT,       // "int"
   TK_CHAR,      // "char"
   TK_IF,        // "if"
@@ -123,6 +124,7 @@ enum {
   ND_FUNC,      // Function definition
   ND_COMP_STMT, // Compound statement
   ND_EXPR_STMT, // Expressions statement
+  ND_STMT_EXPR, // Statement expression (GNU extn.)
 };
 
 enum {
@@ -139,11 +141,13 @@ typedef struct Node {
   struct Node *rhs;  // right-hand side
   int val;           // Number literal
   struct Node *expr; // "return" or expression stmt
+  struct Node *stmt; // Statement expression
   Vector *stmts;     // Compound statement
 
   char *name;        // Identifire
 
   // Global variable
+  bool is_extern;
   char *data;
   int len;
 
@@ -181,6 +185,7 @@ typedef struct {
 
   // global
   char *name;
+  bool is_extern;
   char *data;
   int len;
 } Var;
