@@ -18,7 +18,7 @@ int main(int argc, char **argv) {
     input = argv[2];
   } else {
     if (argc != 2)
-      error("Usage: 9cc [-test] [-dump_ir1] [-dump_ir2]  <code>\n");
+      error("Usage: 9cc [-test] [-dump-ir1] [-dump-ir2] <code>\n");
     input = argv[1];
   }
 
