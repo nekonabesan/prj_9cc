@@ -78,7 +78,7 @@ enum {
   TK_DO,        // "do"
   TK_WHILE,     // "while"
   TK_EQ,        // ==
-  TK_NE,        // !-
+  TK_NE,        // !=
   TK_LOGOR,     // ||
   TK_LOGAND,    // &&
   TK_RETURN,    // "return"
@@ -86,7 +86,7 @@ enum {
   TK_EOF,       // End marker
 };
 
-/// Token type
+// Token type
 typedef struct {
   int ty;      // Token type
   int val;     // Number literal
@@ -107,11 +107,11 @@ enum {
   ND_STR,       // String literal
   ND_IDENT,     // Identifier
   ND_VARDEF,    // Variable definition
-  ND_LVAR,      // local variable reference
+  ND_LVAR,      // Local variable reference
   ND_GVAR,      // Global variable reference
   ND_IF,        // "if"
   ND_FOR,       // "for"
-  ND_DO_WHILE,  //  do ~ while
+  ND_DO_WHILE,  // do ~ while
   ND_ADDR,      // address-of operator ("&")
   ND_DEREF,     // pointer dereference ("*")
   ND_EQ,        // ==
@@ -123,8 +123,9 @@ enum {
   ND_CALL,      // Function call
   ND_FUNC,      // Function definition
   ND_COMP_STMT, // Compound statement
-  ND_EXPR_STMT, // Expressions statement
+  ND_EXPR_STMT, // Expression statement
   ND_STMT_EXPR, // Statement expression (GNU extn.)
+  ND_NULL,      // Null statement
 };
 
 enum {
@@ -140,11 +141,10 @@ typedef struct Node {
   struct Node *lhs;  // left-hand side
   struct Node *rhs;  // right-hand side
   int val;           // Number literal
-  struct Node *expr; // "return" or expression stmt
-  struct Node *stmt; // Statement expression
+  struct Node *expr; // "return" or expresson stmt
   Vector *stmts;     // Compound statement
 
-  char *name;        // Identifire
+  char *name;
 
   // Global variable
   bool is_extern;
@@ -152,7 +152,7 @@ typedef struct Node {
   int len;
 
   // "if" ( cond ) then "else" els
-  //  "for" ( init; cond; inc ) body
+  // "for" ( init; cond; inc ) body
   struct Node *cond;
   struct Node *then;
   struct Node *els;
@@ -174,13 +174,13 @@ typedef struct Node {
 Vector *parse(Vector *tokens);
 int size_of(Type *ty);
 
-/// sama.c
+/// sema.c
 
 typedef struct {
   Type *ty;
   bool is_local;
 
-  // Local
+  // local
   int offset;
 
   // global
@@ -242,8 +242,8 @@ enum {
   IR_TY_IMM,
   IR_TY_JMP,
   IR_TY_LABEL,
-  IR_TY_REG_REG,
   IR_TY_LABEL_ADDR,
+  IR_TY_REG_REG,
   IR_TY_REG_IMM,
   IR_TY_IMM_IMM,
   IR_TY_REG_LABEL,
@@ -258,8 +258,8 @@ typedef struct {
 typedef struct {
   char *name;
   int stacksize;
-  Vector *globals;
   Vector *ir;
+  Vector *globals;
 } Function;
 
 extern IRInfo irinfo[];
