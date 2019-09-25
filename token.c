@@ -1,6 +1,10 @@
 #include "9cc.h"
 
-// Tokenizer
+// Atomic unit in the grammar is called "token".
+// For example, `123`, `"abc"` and `while` are tokens.
+// The tokenizer splits an input string into tokens.
+// Spaces and comments are removed by the tokenizer.
+
 static Token *add_token(Vector *v, int ty, char *input) {
   Token *t = calloc(1, sizeof(Token));
   t->ty = ty;
@@ -13,14 +17,51 @@ static struct {
   char *name;
   int ty;
 } symbols[] = {
-  {"char", TK_CHAR},     {"do", TK_DO},
-  {"else", TK_ELSE},     {"extern", TK_EXTERN},{"for", TK_FOR},
-  {"if", TK_IF},         {"int", TK_INT},
-  {"return", TK_RETURN}, {"sizeof", TK_SIZEOF},
-  {"while", TK_WHILE},   {"&&", TK_LOGAND},
-  {"||", TK_LOGOR},      {"==", TK_EQ},
-  {"!=", TK_NE},         {NULL, 0},
+    {"_Alignof", TK_ALIGNOF},
+    {"char", TK_CHAR},
+    {"do", TK_DO},
+    {"else", TK_ELSE},
+    {"extern", TK_EXTERN},
+    {"for", TK_FOR},
+    {"if", TK_IF},
+    {"int", TK_INT},
+    {"return", TK_RETURN},
+    {"sizeof", TK_SIZEOF},
+    {"while", TK_WHILE},
+    {"&&", TK_LOGAND},
+    {"||", TK_LOGOR},
+    {"==", TK_EQ},
+    {"!=", TK_NE},
+    {NULL, 0},
 };
+
+static char escaped[256] = {
+        ['a'] = '\a', ['b'] = '\b',   ['f'] = '\f',
+        ['n'] = '\n', ['r'] = '\r',   ['t'] = '\t',
+        ['v'] = '\v', ['e'] = '\033', ['E'] = '\033',
+};
+
+static int read_char(int *result, char *p) {
+  char *start = p;
+  if (!*p)
+    error("premature end of input");
+
+  if (*p != '\\') {
+    *result = *p++;
+  } else {
+    p++;
+    if (!*p)
+      error("premature end of input");
+    int esc = escaped[(unsigned)*p];
+    *result = esc ? esc : *p;
+    p++;
+  }
+
+  if (*p != '\'')
+    error("unclosed character literal");
+  p++;
+  return p - start;
+}
 
 static int read_string(StringBuilder *sb, char *p) {
   char *start = p;
@@ -35,24 +76,10 @@ static int read_string(StringBuilder *sb, char *p) {
     }
 
     p++;
-    if (*p == 'a')
-      sb_add(sb, '\a');
-    else if (*p == 'b')
-      sb_add(sb, '\b');
-    else if (*p == 'f')
-      sb_add(sb, '\f');
-    else if (*p == 'n')
-      sb_add(sb, '\n');
-    else if (*p == 'r')
-      sb_add(sb, '\r');
-    else if (*p == 't')
-      sb_add(sb, '\t');
-    else if (*p == 'v')
-      sb_add(sb, '\v');
-    else if (*p == '\0')
+    if (*p == '\0')
       error("PREMATURE end of input");
-    else
-      sb_add(sb, *p);
+    int esc = escaped[(unsigned)*p];
+    sb_add(sb, esc ? esc : *p);
     p++;
   }
   return p - start + 1;
@@ -67,6 +94,35 @@ loop:
     // Skip whitespace
     if (isspace(*p)) {
       p++;
+      continue;
+    }
+
+    // Line comment
+    if (!strncmp(p, "//", 2)) {
+      while (*p && *p != '\n')
+        p++;
+      continue;
+    }
+
+    // Block comment
+    if (!strncmp(p, "/*", 2)) {
+      p += 2;
+      for (;;) {
+        if (*p == '\0')
+          error("premature end of input");
+        if (!strncmp(p, "*/", 2)) {
+          p += 2;
+          break;
+        }
+      }
+      continue;
+    }
+
+    // Character literal
+    if (*p == '\'') {
+      Token *t = add_token(v, TK_NUM, p);
+      p++;
+      p += read_char(&t->val, p);
       continue;
     }
 

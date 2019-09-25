@@ -1,5 +1,22 @@
 #include "9cc.h"
 
+// Semantics analyzer. This pass plays a few important roles as shown
+// below:
+//
+// - Add types to nodes. For example, a tree that represents "1+2" is
+//   typed as INT because the result type of an addition of two
+//   integers is integer.
+//
+// - Resolve variable names based on the C scope rules.
+//   Local variables are resolved to offsets from the base pointer.
+//   Global variables are resolved to their names.
+//
+// - Insert nodes to make array-to-pointer conversion explicit.
+//   Recall that, in C, "array of T" is automatically converted to
+//   "pointer to T" in most contexts.
+//
+// - Reject bad assignments, such as `1=2+3`.
+
 static Type int_ty = {INT, NULL};
 
 typedef struct Env {
@@ -49,7 +66,7 @@ static Node *maybe_decay(Node *base, bool decay) {
 
   Node *node = calloc(1, sizeof(Node));
   node->op = ND_ADDR;
-  node->ty = ptr_of(base->ty->ary_of);
+  node->ty = ptr_to(base->ty->ary_of);
   node->expr = base;
   return node;
 }
@@ -61,7 +78,15 @@ static void check_lval(Node *node) {
   error("not an lvalue: %d (%s)", op, node->name);
 }
 
-static Node *walk(Env *env, Node *node, bool decay) {
+static Node *new_int(int val) {
+  Node *node = calloc(1, sizeof(Node));
+  node->op = ND_NUM;
+  node->ty = INT;
+  node->val = val;
+  return node;
+}
+
+static Node *walk(Node *node, Env *env, bool decay) {
   switch (node->op) {
   case ND_NUM:
     return node;
@@ -96,6 +121,7 @@ static Node *walk(Env *env, Node *node, bool decay) {
     return maybe_decay(ret, decay);
   }
   case ND_VARDEF: {
+    stacksize = roundup(stacksize, align_of(node->ty));
     stacksize += size_of(node->ty);
     node->offset = stacksize;
 
@@ -106,29 +132,29 @@ static Node *walk(Env *env, Node *node, bool decay) {
     map_put(env->vars, node->name, var);
 
     if (node->init)
-      node->init = walk(env, node->init, true);
+      node->init = walk(node->init, env, true);
     return node;
   }
   case ND_IF:
-    node->cond = walk(env, node->cond, true);
-    node->then = walk(env, node->then, true);
+    node->cond = walk(node->cond, env, true);
+    node->then = walk(node->then, env, true);
     if (node->els)
-      node->els = walk(env, node->els, true);
+      node->els = walk(node->els, env, true);
     return node;
   case ND_FOR:
-    node->init = walk(env, node->init, true);
-    node->cond = walk(env, node->cond, true);
-    node->inc = walk(env, node->inc, true);
-    node->body = walk(env, node->body, true);
+    node->init = walk(node->init, env, true);
+    node->cond = walk(node->cond, env, true);
+    node->inc = walk(node->inc, env, true);
+    node->body = walk(node->body, env, true);
     return node;
   case ND_DO_WHILE:
-    node->cond = walk(env, node->cond, true);
-    node->body = walk(env, node->body, true);
+    node->cond = walk(node->cond, env, true);
+    node->body = walk(node->body, env, true);
     return node;
   case '+':
   case '-':
-    node->lhs = walk(env, node->lhs, true);
-    node->rhs = walk(env, node->rhs, true);
+    node->lhs = walk(node->lhs, env, true);
+    node->rhs = walk(node->rhs, env, true);
 
     if (node->rhs->ty->ty == PTR)
       swap(&node->lhs, &node->rhs);
@@ -137,10 +163,10 @@ static Node *walk(Env *env, Node *node, bool decay) {
     node->ty = node->lhs->ty;
     return node;
   case '=':
-    node->lhs = walk(env, node->lhs, false);
+    node->lhs = walk(node->lhs, env, false);
 
     check_lval(node->lhs);
-    node->rhs = walk(env, node->rhs, true);
+    node->rhs = walk(node->rhs, env, true);
     node->ty = node->lhs->ty;
     return node;
   case '*':
@@ -150,55 +176,57 @@ static Node *walk(Env *env, Node *node, bool decay) {
   case ND_NE:
   case ND_LOGAND:
   case ND_LOGOR:
-    node->lhs = walk(env, node->lhs, true);
-    node->rhs = walk(env, node->rhs, true);
+    node->lhs = walk(node->lhs, env, true);
+    node->rhs = walk(node->rhs, env, true);
     node->ty = node->lhs->ty;
     return node;
   case ND_ADDR:
-    node->expr = walk(env, node->expr, true);
+    node->expr = walk(node->expr, env, true);
     check_lval(node->expr);
-    node->ty = ptr_of(node->expr->ty);
+    node->ty = ptr_to(node->expr->ty);
     return node;
   case ND_DEREF:
-    node->expr = walk(env, node->expr, true);
+    node->expr = walk(node->expr, env, true);
     if (node->expr->ty->ty != PTR)
       error("operand must be a pointer");
-    node->ty = node->expr->ty->ptr_of;
+    node->ty = node->expr->ty->ptr_to;
     return node;
   case ND_RETURN:
-    node->expr = walk(env, node->expr, true);
+    node->expr = walk(node->expr, env, true);
     return node;
   case ND_SIZEOF: {
-    Node *expr = walk(env, node->expr, false);
+    Node *expr = walk(node->expr, env, false);
 
-    Node *ret = calloc(1, sizeof(Node));
-    ret->op = ND_NUM;
-    ret->ty = INT;
-    ret->val = size_of(expr->ty);
-    return ret;
+    return new_int(size_of(expr->ty));
+  }
+  case ND_ALIGNOF: {
+    Node *expr = walk(node->expr, env, false);
+    return new_int(align_of(expr->ty));
   }
   case ND_CALL:
     for (int i = 0; i < node->args->len; i++)
-      node->args->data[i] = walk(env, node->args->data[i], true);
+      node->args->data[i] = walk(node->args->data[i], env, true);
     node->ty = &int_ty;
     return node;
   case ND_FUNC:
     for (int i = 0; i < node->args->len; i++)
-      node->args->data[i] = walk(env, node->args->data[i], true);
-    node->body = walk(env, node->body, true);
+      node->args->data[i] = walk(node->args->data[i], env, true);
+    node->body = walk(node->body, env, true);
     return node;
   case ND_COMP_STMT: {
     Env *newenv = new_env(env);
     for (int i = 0; i < node->stmts->len; i++)
-      node->stmts->data[i] = walk(newenv, node->stmts->data[i], true);
+      node->stmts->data[i] = walk(node->stmts->data[i], newenv, true);
     return node;
   }
   case ND_EXPR_STMT:
-    node->expr = walk(env, node->expr, true);
+    node->expr = walk(node->expr, env, true);
     return node;
   case ND_STMT_EXPR:
-    node->stmt = walk(env, node->stmt, true);
+    node->body = walk(node->body, env, true);
     node->ty = &int_ty;
+    return node;
+  case ND_NULL:
     return node;
   default:
     assert(0 && "unknown node type");
@@ -223,7 +251,7 @@ Vector *sema(Vector *nodes) {
     assert(node->op == ND_FUNC);
 
     stacksize = 0;
-    walk(topenv, node, true);
+    walk(node, topenv, true);
     node->stacksize = stacksize;
   }
 

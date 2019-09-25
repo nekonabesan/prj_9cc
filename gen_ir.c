@@ -1,83 +1,15 @@
 #include "9cc.h"
 
-// Compile AST to intermediate code that has infinite number of registers.
-// Base pointer is aloways assigned to r0
-
-IRInfo irinfo[] = {
-      [IR_ADD] = {"ADD", IR_TY_REG_REG},
-      [IR_CALL] = {"CALL", IR_TY_CALL},
-      [IR_DIV] = {"DIV", IR_TY_REG_REG},
-      [IR_IMM] = {"MOV", IR_TY_REG_IMM},
-      [IR_JMP] = {"JMP", IR_TY_JMP},
-      [IR_KILL] = {"KILL", IR_TY_REG},
-      [IR_LABEL] = {"", IR_TY_LABEL},
-      [IR_LABEL_ADDR] = {"LABEL_ADDR", IR_TY_LABEL_ADDR},
-      [IR_EQ] = {"EQ", IR_TY_REG_REG},
-      [IR_NE] = {"NE", IR_TY_REG_REG},
-      [IR_LT] = {"LT", IR_TY_REG_REG},
-      [IR_LOAD8] = {"LOAD8", IR_TY_REG_REG},
-      [IR_LOAD32] = {"LOAD32", IR_TY_REG_REG},
-      [IR_LOAD64] = {"LOAD64", IR_TY_REG_REG},
-      [IR_MOV] = {"MOV", IR_TY_REG_REG},
-      [IR_MUL] = {"MUL", IR_TY_REG_REG},
-      [IR_NOP] = {"NOP", IR_TY_NOARG},
-      [IR_RETURN] = {"RET", IR_TY_REG},
-      [IR_STORE8] = {"STORE8", IR_TY_REG_REG},
-      [IR_STORE32] = {"STORE32", IR_TY_REG_REG},
-      [IR_STORE64] = {"STORE64", IR_TY_REG_REG},
-      [IR_STORE8_ARG] = {"STORE8_ARG", IR_TY_IMM_IMM},
-      [IR_STORE32_ARG] = {"STORE32_ARG", IR_TY_IMM_IMM},
-      [IR_STORE64_ARG] = {"IR_STORE64_ARG", IR_TY_IMM_IMM},
-      [IR_SUB] = {"SUB", IR_TY_REG_REG},
-      [IR_SUB_IMM] = {"SUB", IR_TY_REG_IMM},
-      [IR_IF] = {"IF", IR_TY_REG_LABEL},
-      [IR_UNLESS] = {"UNLESS", IR_TY_REG_LABEL},
-};
-
-static char *tostr(IR *ir) {
-  IRInfo info = irinfo[ir->op];
-
-  switch (info.ty) {
-  case IR_TY_LABEL:
-    return format(".L%d:", ir->lhs);
-  case IR_TY_LABEL_ADDR:
-    return format("  %s r%d, %s", info.name, ir->lhs, ir->name);
-  case IR_TY_IMM:
-    return format("  %s %d", info.name, ir->lhs);
-  case IR_TY_REG:
-    return format("  %s r%d", info.name, ir->lhs);
-  case IR_TY_JMP:
-    return format("  %s .L%d", info.name, ir->lhs);
-  case IR_TY_REG_REG:
-    return format("  %s r%d, r%d", info.name, ir->lhs, ir->rhs);
-  case IR_TY_REG_IMM:
-    return format("  %s r%d, %d", info.name, ir->lhs, ir->rhs);
-  case IR_TY_IMM_IMM:
-    return format("  %s %d, %d", info.name, ir->lhs, ir->rhs);
-  case IR_TY_REG_LABEL:
-    return format("  %s r%d, .L%d", info.name, ir->lhs, ir->rhs);
-  case IR_TY_CALL: {
-    StringBuilder *sb = new_sb();
-    sb_append(sb, format("  r%d = %s(", ir->lhs, ir->name));
-    for (int i = 0; i < ir->nargs; i++)
-      sb_append(sb, format(", r%d", ir->args));
-    sb_append(sb, ")");
-    return sb_get(sb);
-  }
-  default:
-    assert(info.ty == IR_TY_NOARG);
-    return format("  %s", info.name);
-  }
-}
-
-void dump_ir(Vector *irv) {
-  for (int i = 0; i < irv->len; i++) {
-    Function *fn = irv->data[i];
-    fprintf(stderr, "%s():\n", fn->name);
-    for (int j = 0; j < fn->ir->len; j++)
-      fprintf(stderr, "%s\n", tostr(fn->ir->data[j]));
-  }
-}
+// 9cc's code generation is two-pass. In the first pass, abstract
+// syntax trees are compiled to IR (intermediate representation).
+//
+// IR resembles the real x86-64 instruction set, but it has infinite
+// number of registers. We don't try too hard to reuse registers in
+// this pass. Instead, we "kill" registers to mark them as dead when
+// we are done with them and use new registers.
+//
+// Such infinite number of registers are mapped to a finite registers
+// in a later pass.
 
 static Vector *code;
 static int nreg;
@@ -95,19 +27,55 @@ static IR *add(int op, int lhs, int rhs) {
 }
 
 static void kill(int r) { add(IR_KILL, r, -1); }
-
 static void label(int x) { add(IR_LABEL, x, -1); }
-
 static int gen_expr(Node *node);
 
+static int choose_insn(Node *node, int op8, int op32, int op64) {
+  int sz = size_of(node->ty);
+  if (sz == 1)
+    return op8;
+  if (sz == 4)
+    return op32;
+  assert(sz == 8);
+  return op64;
+}
+
+static int load_insn(Node *node) {
+  return choose_insn(node, IR_LOAD8, IR_LOAD32, IR_LOAD64);
+}
+
+static int store_insn(Node *node) {
+  return choose_insn(node, IR_STORE8, IR_STORE32, IR_STORE64);
+}
+
+static int store_arg_insn(Node *node) {
+  return choose_insn(node, IR_STORE8_ARG, IR_STORE32_ARG, IR_STORE64_ARG);
+}
+
+// In C, all expressions that can be written on the left-hand side of
+// the '=' operator must have an address in memory. In other words, if
+// you can apply the '&' operator to take an address of some
+// expression E, you can assign E to a new value.
+//
+// Other expressions, such as `1+2`, cannot be written on the lhs of
+// '=', since they are just temporary values that don't have an address.
+//
+// The stuff that can be written on the lhs of '=' is called lvalue.
+// Other values are called rvalue. An lvalue is essentially an address.
+//
+// When lvalues appear on the rvalue context, they are converted to
+// rvalues by loading their values from their addresses. You can think
+// '&' as an operator that suppresses such automatic lvalue-to-rvalue
+// conversion.
+//
+// This function evaluates a given node as an lvalue.
 static int gen_lval(Node *node) {
   if (node->op == ND_DEREF)
     return gen_expr(node->expr);
 
   if (node->op == ND_LVAR) {
     int r = nreg++;
-    add(IR_MOV, r, 0);
-    add(IR_SUB_IMM, r, node->offset);
+    add(IR_BPREL, r, node->offset);
     return r;
   }
 
@@ -183,12 +151,7 @@ static int gen_expr(Node *node) {
   case ND_GVAR:
   case ND_LVAR: {
     int r = gen_lval(node);
-    if (node->ty->ty == CHAR)
-      add(IR_LOAD8, r, r);
-    else if (node->ty->ty == INT)
-      add(IR_LOAD32, r, r);
-    else
-      add(IR_LOAD64, r, r);
+    add(load_insn(node), r, r);
     return r;
   }
   case ND_CALL: {
@@ -211,12 +174,7 @@ static int gen_expr(Node *node) {
     return gen_lval(node->expr);
   case ND_DEREF: {
     int r = gen_expr(node->expr);
-    if (node->expr->ty->ptr_of->ty == CHAR)
-      add(IR_LOAD8, r, r);
-    else if (node->expr->ty->ptr_of->ty == INT)
-      add(IR_LOAD32, r, r);
-    else
-      add(IR_LOAD64, r, r);
+    add(load_insn(node), r, r);
     return r;
   }
   case ND_STMT_EXPR: {
@@ -226,7 +184,7 @@ static int gen_expr(Node *node) {
     int r = nreg++;
     return_reg = r;
 
-    gen_stmt(node->stmt);
+    gen_stmt(node->body);
     label(return_label);
 
     return_label = orig_label;
@@ -236,12 +194,7 @@ static int gen_expr(Node *node) {
   case '=': {
     int rhs = gen_expr(node->rhs);
     int lhs = gen_lval(node->lhs);
-    if (node->lhs->ty->ty == CHAR)
-      add(IR_STORE8, lhs, rhs);
-    else if (node->lhs->ty->ty == INT)
-      add(IR_STORE32, lhs, rhs);
-    else
-      add(IR_STORE64, lhs, rhs);
+    add(store_insn(node), lhs, rhs);
     kill(rhs);
     return lhs;
   }
@@ -254,7 +207,7 @@ static int gen_expr(Node *node) {
 
     int rhs = gen_expr(node->rhs);
     int r = nreg++;
-    add(IR_IMM, r, size_of(node->lhs->ty->ptr_of));
+    add(IR_IMM, r, size_of(node->lhs->ty->ptr_to));
     add(IR_MUL, rhs, r);
     kill(r);
 
@@ -275,19 +228,16 @@ static int gen_expr(Node *node) {
 }
 
 static void gen_stmt(Node *node) {
+  if (node->op == ND_NULL)
+    return;
+
   if (node->op == ND_VARDEF) {
     if (!node->init)
       return;
     int rhs = gen_expr(node->init);
     int lhs = nreg++;
-    add(IR_MOV, lhs, 0);
-    add(IR_SUB_IMM, lhs, node->offset);
-    if (node->ty->ty == CHAR)
-      add(IR_STORE8, lhs, rhs);
-    else if (node->ty->ty == INT)
-      add(IR_STORE32, lhs, rhs);
-    else
-      add(IR_STORE64, lhs, rhs);
+    add(IR_BPREL, lhs, node->offset);
+    add(store_insn(node), lhs, rhs);
     kill(lhs);
     kill(rhs);
     return;
@@ -305,6 +255,7 @@ static void gen_stmt(Node *node) {
       label(x);
       gen_stmt(node->els);
       label(y);
+      return;
     }
 
     int x = nlabel++;
@@ -326,7 +277,7 @@ static void gen_stmt(Node *node) {
     add(IR_UNLESS, r, y);
     kill(r);
     gen_stmt(node->body);
-    kill(gen_expr(node->inc));
+    gen_stmt(node->inc);
     add(IR_JMP, x, -1);
     label(y);
     return;
@@ -389,12 +340,7 @@ Vector *gen_ir(Vector *nodes) {
 
     for (int i = 0; i < node->args->len; i++) {
       Node *arg = node->args->data[i];
-      if (arg->ty->ty == CHAR)
-        add(IR_STORE8_ARG, arg->offset, i);
-      else if (arg->ty->ty == INT)
-        add(IR_STORE32_ARG, arg->offset, i);
-      else
-        add(IR_STORE64_ARG, arg->offset, i);
+      add(store_arg_insn(node), arg->offset, i);
     }
 
     gen_stmt(node->body);

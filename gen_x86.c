@@ -1,5 +1,7 @@
 #include "9cc.h"
 
+// This pass generates x86-64 assembly from IR.
+
 static int label;
 
 const char *argreg8[] = {"dil", "sil", "dl", "cl", "r8b", "r9b"};
@@ -7,14 +9,20 @@ const char *argreg32[] = {"edi", "esi", "edx", "ecx", "r8d", "r9d"};
 const char *argreg64[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
 
 static char *escape(char *s, int len) {
+  static char escaped[256] = {
+    ['b'] = '\b', ['f'] = '\f', ['n'] = '\n', ['r'] = '\r',
+    ['t'] = '\t', ['\\'] = '\\', ['\''] = '\'', ['"'] = '"',
+  };
+
   char *buf = malloc(len * 4);
   char *p = buf;
   for (int i = 0; i < len; i++) {
-    if (s[i] == '\\') {
+    char esc = escaped[(unsigned)s[i]];
+    if (esc) {
       *p++ = '\\';
-      *p++ = '\\';
+      *p++ = esc;
     } else if (isgraph(s[i]) || s[i] == ' ') {
-      *p++ = s[i];
+      *p++ = esc;
     } else {
       sprintf(p, "\\%03o", s[i]);
       p += 4;
@@ -37,7 +45,7 @@ void gen(Function *fn) {
   printf("%s:\n", fn->name);
   printf("  push rbp\n");
   printf("  mov rbp, rsp\n");
-  printf("  sub rsp, %d\n", fn->stacksize);
+  printf("  sub rsp, %d\n", roundup(fn->stacksize, 16));
   printf("  push r12\n");
   printf("  push r13\n");
   printf("  push r14\n");
@@ -50,8 +58,8 @@ void gen(Function *fn) {
     case IR_IMM:
       printf("  mov %s, %d\n", regs[ir->lhs], ir->rhs);
       break;
-    case IR_SUB_IMM:
-      printf("  sub %s, %d\n", regs[ir->lhs], ir->rhs);
+    case IR_BPREL:
+      printf("  lea %s, [rbp-%d]\n", regs[ir->lhs], ir->rhs);
       break;
     case IR_MOV:
       printf("  mov %s, %s\n", regs[ir->lhs], regs[ir->rhs]);

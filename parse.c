@@ -1,9 +1,18 @@
 #include "9cc.h"
 
+// This is a recursive-descendent parser which constructs abstract
+// syntax tree from input tokens.
+//
+// This parser knows only about BNF of the C grammer and doesn't care
+// about its semantics. Therefore, some invalid expressions, such as
+// `1+2=3`, are accepted by this parser, but that's intentional.
+// Semantic errors are detected in a later pass.
+
 static Vector *tokens;
 static int pos;
 static Type int_ty = {INT, NULL};
 static Type char_ty = {CHAR, NULL};
+static Node null_stmt = {ND_NULL};
 
 static Node *assign();
 
@@ -55,7 +64,7 @@ static Node *primary() {
     if (consume('{')) {
       Node *node = calloc(1, sizeof(Node));
       node->op = ND_STMT_EXPR;
-      node->stmt = compound_stmt();
+      node->body = compound_stmt();
       expect(')');
       return node;
     }
@@ -122,6 +131,8 @@ static Node *unary() {
     return new_expr(ND_ADDR, mul());
   if (consume(TK_SIZEOF))
     return new_expr(ND_SIZEOF, unary());
+  if (consume(TK_ALIGNOF))
+    return new_expr(ND_ALIGNOF, unary());
   return postfix();
 }
 
@@ -220,7 +231,7 @@ static Type *type() {
   pos++;
 
   while (consume('*'))
-    ty = ptr_of(ty);
+    ty = ptr_to(ty);
   return ty;
 }
 
@@ -313,7 +324,17 @@ static Node *stmt() {
       node->init = expr_stmt();
     node->cond = assign();
     expect(';');
-    node->inc = assign();
+    node->inc = new_expr(ND_EXPR_STMT, assign());
+    expect(')');
+    node->body = stmt();
+    return node;
+  case TK_WHILE:
+    pos++;
+    node->op = ND_FOR;
+    node->init = &null_stmt;
+    node->inc = &null_stmt;
+    expect('(');
+    node->cond = assign();
     expect(')');
     node->body = stmt();
     return node;
@@ -340,6 +361,9 @@ static Node *stmt() {
     while (!consume('}'))
       vec_push(node->stmts, stmt());
     return node;
+  case ';':
+    pos++;
+    return &null_stmt;
   default:
     return expr_stmt();
   }
