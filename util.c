@@ -89,8 +89,7 @@ void sb_append(StringBuilder *sb, char *s) {
 }
 
 char *sb_get(StringBuilder *sb) {
-  sb_grow(sb, 1);
-  sb->data[sb->len] = '\0';
+  sb_add(sb, '\0');
   return sb->data;
 }
 
@@ -118,5 +117,4 @@ int size_of(Type *ty) {
     return 8;
   assert(ty->ty == ARY);
   return size_of(ty->ary_of) * ty->len;
-  return 8;
 }
