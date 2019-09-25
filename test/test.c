@@ -93,12 +93,18 @@ int main() {
   EXPECT(8, ({ int *x; return sizeof x; }));
   EXPECT(16, ({ int x[4]; return sizeof x; }));
 
+  EXPECT(1, ({ char x; return _Alignof x; }));
+  EXPECT(4, ({ int x; return _Alignof(x); }));
+  EXPECT(8, ({ int *x; return _Alignof x; }));
+  EXPECT(4, ({ int x[4]; return _Alignof x; }));
+  EXPECT(8, ({ int *x[4]; return _Alignof x; }));
+
   EXPECT(5, ({ char x = 5; return x; }));
   EXPECT(42, ({ int x = 0; char *p = &x; p[0] = 42; return x; }));
 
   EXPECT('a', ({ char *p = "abc"; return p[0]; }));
   EXPECT('b', ({ char *p = "abc"; return p[1]; }));
-  EXPECT('c' , ({ char *p = "abc"; return p[2]; }));
+  EXPECT('c', ({ char *p = "abc"; return p[2]; }));
   EXPECT(0, ({ char *p = "abc"; return p[3]; }));
 
   EXPECT(1, ({ int x = 1; { int x = 2; } return x; }));

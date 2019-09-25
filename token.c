@@ -17,19 +17,28 @@ static struct {
   char *name;
   int ty;
 } symbols[] = {
-  {"char", TK_CHAR},     {"do", TK_DO},
-  {"else", TK_ELSE},     {"extern", TK_EXTERN},{"for", TK_FOR},
-  {"if", TK_IF},         {"int", TK_INT},
-  {"return", TK_RETURN}, {"sizeof", TK_SIZEOF},
-  {"while", TK_WHILE},   {"&&", TK_LOGAND},
-  {"||", TK_LOGOR},      {"==", TK_EQ},
-  {"!=", TK_NE},         {NULL, 0},
+    {"_Alignof", TK_ALIGNOF},
+    {"char", TK_CHAR},
+    {"do", TK_DO},
+    {"else", TK_ELSE},
+    {"extern", TK_EXTERN},
+    {"for", TK_FOR},
+    {"if", TK_IF},
+    {"int", TK_INT},
+    {"return", TK_RETURN},
+    {"sizeof", TK_SIZEOF},
+    {"while", TK_WHILE},
+    {"&&", TK_LOGAND},
+    {"||", TK_LOGOR},
+    {"==", TK_EQ},
+    {"!=", TK_NE},
+    {NULL, 0},
 };
 
 static char escaped[256] = {
-  ['a'] = '\a', ['b'] = '\b', ['f'] = '\f',
-  ['n'] = '\n', ['r'] = '\r', ['t'] = '\t',
-  ['v'] = '\v', ['e'] = '\033', ['E'] = '\033',
+        ['a'] = '\a', ['b'] = '\b',   ['f'] = '\f',
+        ['n'] = '\n', ['r'] = '\r',   ['t'] = '\t',
+        ['v'] = '\v', ['e'] = '\033', ['E'] = '\033',
 };
 
 static int read_char(int *result, char *p) {
@@ -49,7 +58,7 @@ static int read_char(int *result, char *p) {
   }
 
   if (*p != '\'')
-    error("unclosed charactar literal");
+    error("unclosed character literal");
   p++;
   return p - start;
 }
@@ -109,7 +118,7 @@ loop:
       continue;
     }
 
-    // Charactor literal
+    // Character literal
     if (*p == '\'') {
       Token *t = add_token(v, TK_NUM, p);
       p++;
