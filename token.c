@@ -41,7 +41,7 @@ static char escaped[256] = {
         ['v'] = '\v', ['e'] = '\033', ['E'] = '\033',
 };
 
-static char read_char(int *result, char *p) {
+static char *read_char(int *result, char *p) {
   if (!*p)
     error("premature end of input");
 
@@ -61,7 +61,7 @@ static char read_char(int *result, char *p) {
   return p + 1;
 }
 
-static char read_string(StringBuilder *sb, char *p) {
+static char *read_string(StringBuilder *sb, char *p) {
   while (*p != '"') {
     if (!*p)
       error("premature end of input");

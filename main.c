@@ -36,7 +36,7 @@ int main(int argc, char **argv) {
     filename = argv[2];
   } else {
     if (argc != 2)
-      error("Usage: 9cc [-test] [-dump-ir1] [-dump-ir2] <code>\n");
+      error("Usage: 9cc [-test] [-dump-ir1] [-dump-ir2] <file>\n");
     filename = argv[1];
   }
 

@@ -10,8 +10,8 @@ const char *argreg64[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
 
 static char *escape(char *s, int len) {
   static char escaped[256] = {
-    ['b'] = '\b', ['f'] = '\f', ['n'] = '\n', ['r'] = '\r',
-    ['t'] = '\t', ['\\'] = '\\', ['\''] = '\'', ['"'] = '"',
+          ['\b'] = 'b', ['\f'] = 'f',  ['\n'] = 'n',  ['\r'] = 'r',
+          ['\t'] = 't', ['\\'] = '\\', ['\''] = '\'', ['"'] = '"',
   };
 
   StringBuilder *sb = new_sb();

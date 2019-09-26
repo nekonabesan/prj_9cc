@@ -324,13 +324,11 @@ Vector *gen_ir(Vector *nodes) {
       continue;
 
     assert(node->op == ND_FUNC);
-
     code = new_vec();
-    nreg = 1;
 
     for (int i = 0; i < node->args->len; i++) {
       Node *arg = node->args->data[i];
-      add(store_arg_insn(node), arg->offset, i);
+      add(store_arg_insn(arg), arg->offset, i);
     }
 
     gen_stmt(node->body);
