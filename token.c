@@ -27,6 +27,7 @@ static struct {
     {"int", TK_INT},
     {"return", TK_RETURN},
     {"sizeof", TK_SIZEOF},
+    {"struct", TK_STRUCT},
     {"while", TK_WHILE},
     {"&&", TK_LOGAND},
     {"||", TK_LOGOR},
@@ -147,7 +148,7 @@ loop:
     }
 
     // Single-letter token
-    if (strchr("+-*/;=(),{}<>[]&", *p)) {
+    if (strchr("+-*/;=(),{}<>[]&.", *p)) {
       add_token(v, *p, p);
       p++;
       continue;

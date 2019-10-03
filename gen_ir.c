@@ -12,8 +12,8 @@
 // in a later pass.
 
 static Vector *code;
-static int nreg;
-static int nlabel;
+static int nreg = 1;
+static int nlabel = 1;
 static int return_label;
 static int return_reg;
 
@@ -31,12 +31,11 @@ static void label(int x) { add(IR_LABEL, x, -1); }
 static int gen_expr(Node *node);
 
 static int choose_insn(Node *node, int op8, int op32, int op64) {
-  int sz = size_of(node->ty);
-  if (sz == 1)
+  if (node->ty->size == 1)
     return op8;
-  if (sz == 4)
+  if (node->ty->size == 4)
     return op32;
-  assert(sz == 8);
+  assert(node->ty->size == 8);
   return op64;
 }
 
@@ -72,6 +71,15 @@ static int store_arg_insn(Node *node) {
 static int gen_lval(Node *node) {
   if (node->op == ND_DEREF)
     return gen_expr(node->expr);
+
+  if (node->op == ND_DOT) {
+    int r1 = gen_lval(node->expr);
+    int r2 = nreg++;
+    add(IR_IMM, r2, node->offset);
+    add(IR_ADD, r1, r2);
+    kill(r2);
+    return r1;
+  }
 
   if (node->op == ND_LVAR) {
     int r = nreg++;
@@ -139,7 +147,8 @@ static int gen_expr(Node *node) {
     return r1;
   }
   case ND_GVAR:
-  case ND_LVAR: {
+  case ND_LVAR:
+  case ND_DOT: {
     int r = gen_lval(node);
     add(load_insn(node), r, r);
     return r;
@@ -197,7 +206,7 @@ static int gen_expr(Node *node) {
 
     int rhs = gen_expr(node->rhs);
     int r = nreg++;
-    add(IR_IMM, r, size_of(node->lhs->ty->ptr_to));
+    add(IR_IMM, r, node->lhs->ty->ptr_to->size);
     add(IR_MUL, rhs, r);
     kill(r);
 
@@ -315,7 +324,6 @@ static void gen_stmt(Node *node) {
 
 Vector *gen_ir(Vector *nodes) {
   Vector *v = new_vec();
-  nlabel = 1;
 
   for (int i = 0; i < nodes->len; i++) {
     Node *node = nodes->data[i];

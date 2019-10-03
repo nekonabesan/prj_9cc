@@ -10,8 +10,6 @@
 
 static Vector *tokens;
 static int pos;
-static Type int_ty = {INT, NULL};
-static Type char_ty = {CHAR, NULL};
 static Node null_stmt = {ND_NULL};
 
 static Node *assign();
@@ -23,6 +21,17 @@ static void expect(int ty) {
   pos++;
 }
 
+static Type *new_prim_ty(int ty, int size) {
+  Type *ret = calloc(1, sizeof(Type));
+  ret->ty = ty;
+  ret->size = size;
+  ret->align = size;
+  return ret;
+}
+
+static Type *char_ty() { return new_prim_ty(CHAR, 1); }
+static Type *int_ty() { return new_prim_ty(INT, 4); }
+
 static bool consume(int ty) {
   Token *t = tokens->data[pos];
   if (t->ty != ty)
@@ -31,12 +40,35 @@ static bool consume(int ty) {
   return true;
 }
 
-static Type *get_type() {
+static bool is_typename() {
   Token *t = tokens->data[pos];
-  if (t->ty == TK_INT)
-    return &int_ty;
-  if (t->ty == TK_CHAR)
-    return &char_ty;
+  return t->ty == TK_INT || t->ty == TK_CHAR || t->ty == TK_STRUCT;
+}
+
+static Node *decl();
+
+static Type *read_type() {
+  Token *t = tokens->data[pos];
+
+  if (t->ty == TK_INT) {
+    pos++;
+    return int_ty();
+  }
+
+  if (t->ty == TK_CHAR) {
+    pos++;
+    return char_ty();
+  }
+
+  if (t->ty == TK_STRUCT) {
+    pos++;
+    expect('{');
+    Vector *members = new_vec();
+    while (!consume('}'))
+      vec_push(members, decl());
+    return struct_of(members);
+  }
+
   return NULL;
 }
 
@@ -57,6 +89,13 @@ static Node *new_expr(int op, Node *expr) {
 
 static Node *compound_stmt();
 
+static char *ident() {
+  Token *t = tokens->data[pos++];
+  if (t->ty != TK_IDENT)
+    error("identifier expected, but got %s", t->input);
+  return t->name;
+}
+
 static Node *primary() {
   Token *t = tokens->data[pos++];
 
@@ -76,14 +115,14 @@ static Node *primary() {
   Node *node = calloc(1, sizeof(Node));
 
   if (t->ty == TK_NUM) {
-    node->ty = &int_ty;
+    node->ty = int_ty();
     node->op = ND_NUM;
     node->val = t->val;
     return node;
   }
 
   if (t->ty == TK_STR) {
-    node->ty = ary_of(&char_ty, strlen(t->str));
+    node->ty = ary_of(char_ty(), strlen(t->str));
     node->op = ND_STR;
     node->data = t->str;
     node->len = t->len;
@@ -117,6 +156,15 @@ static Node *mul();
 
 static Node *postfix() {
   Node *lhs = primary();
+
+  if (consume('.')) {
+    Node *node = calloc(1, sizeof(Node));
+    node->op = ND_DOT;
+    node->expr = lhs;
+    node->member = ident();
+    return node;
+  }
+
   while (consume('[')) {
     lhs = new_expr(ND_DEREF, new_binop('+', lhs, assign()));
     expect(']');
@@ -225,10 +273,9 @@ static Node *assign() {
 
 static Type *type() {
   Token *t = tokens->data[pos];
-  Type *ty = get_type();
+  Type *ty = read_type();
   if (!ty)
     error("typename expected, but got %s", t->input);
-  pos++;
 
   while (consume('*'))
     ty = ptr_to(ty);
@@ -259,11 +306,7 @@ static Node *decl() {
   node->ty = type();
 
   // Read an identifier.
-  Token *t = tokens->data[pos];
-  if (t->ty != TK_IDENT)
-    error("variable name expected, but got %s", t->input);
-  node->name = t->name;
-  pos++;
+  node->name = ident();
 
   // Read the second half of type name (e.g. `[3][5]`).
   node->ty = read_array(node->ty);
@@ -279,12 +322,7 @@ static Node *param() {
   Node *node = calloc(1, sizeof(Node));
   node->op = ND_VARDEF;
   node->ty = type();
-
-  Token *t = tokens->data[pos];
-  if (t->ty != TK_IDENT)
-    error("parameter name expected, but got %s", t->input);
-  node->name = t->name;
-  pos++;
+  node->name = ident();
   return node;
 }
 
@@ -301,6 +339,7 @@ static Node *stmt() {
   switch (t->ty) {
   case TK_INT:
   case TK_CHAR:
+  case TK_STRUCT:
     return decl();
   case TK_IF:
     pos++;
@@ -318,7 +357,7 @@ static Node *stmt() {
     pos++;
     node->op = ND_FOR;
     expect('(');
-    if (get_type())
+    if (is_typename())
       node->init = decl();
     else
       node->init = expr_stmt();
@@ -387,11 +426,7 @@ static Node *toplevel() {
     error("typename expected, but got %s", t->input);
   }
 
-  Token *t = tokens->data[pos];
-  if (t->ty != TK_IDENT)
-    error("function or variable name expected, but got %s", t->input);
-  char *name = t->name;
-  pos++;
+  char *name = ident();
 
   // Function
   if (consume('(')) {
@@ -421,8 +456,8 @@ static Node *toplevel() {
   if (is_extern) {
     node->is_extern = true;
   } else {
-    node->data = calloc(1, size_of(node->ty));
-    node->len = size_of(node->ty);
+    node->data = calloc(1, node->ty->size);
+    node->len = node->ty->size;
   }
   expect(';');
   return node;
