@@ -77,9 +77,12 @@ enum {
   TK_NUM = 256, // Number literal
   TK_STR,       // String literal
   TK_IDENT,     // Identifier
+  TK_ARROW,     // ->
   TK_EXTERN,    // "extern"
+  TK_TYPEDEF,   // "typedef"
   TK_INT,       // "int"
   TK_CHAR,      // "char"
+  TK_VOID,      // "void"
   TK_STRUCT,    // "struct"
   TK_IF,        // "if"
   TK_ELSE,      // "else"
@@ -144,6 +147,7 @@ enum {
 enum {
   INT,
   CHAR,
+  VOID,
   PTR,
   ARY,
   STRUCT,
@@ -164,12 +168,6 @@ typedef struct Node {
   bool is_extern;
   char *data;
   int len;
-
-  // Struct
-  Vector *members;
-
-  // Struct accses
-  char *member;
 
   // "if" ( cond ) then "else" els
   // "for" ( init; cond; inc ) body

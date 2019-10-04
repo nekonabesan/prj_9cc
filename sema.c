@@ -177,13 +177,13 @@ static Node *walk(Node *node, Env *env, bool decay) {
     Type *ty = node->expr->ty;
     for (int i = 0; i < ty->members->len; i++) {
       Node *m = ty->members->data[i];
-      if (strcmp(m->name, node->member))
+      if (strcmp(m->name, node->name))
         continue;
       node->ty = m->ty;
       node->offset = m->ty->offset;
-      return node;
+      return maybe_decay(node, decay);
     }
-    error("member missing: %s", node->member);
+    error("member missing: %s", node->name);
   case '*':
   case '/':
   case '<':
@@ -202,8 +202,13 @@ static Node *walk(Node *node, Env *env, bool decay) {
     return node;
   case ND_DEREF:
     node->expr = walk(node->expr, env, true);
+
     if (node->expr->ty->ty != PTR)
       error("operand must be a pointer");
+
+    if (node->expr->ty->ptr_to->ty == VOID)
+      error("cannot dereference void opinter");
+
     node->ty = node->expr->ty->ptr_to;
     return node;
   case ND_RETURN:

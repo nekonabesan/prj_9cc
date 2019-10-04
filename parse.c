@@ -8,9 +8,24 @@
 // `1+2=3`, are accepted by this parser, but that's intentional.
 // Semantic errors are detected in a later pass.
 
+typedef struct Env {
+  Map *typedefs;
+  Map *tags;
+  struct Env *next;
+} Env;
+
 static Vector *tokens;
 static int pos;
+struct Env *env;
 static Node null_stmt = {ND_NULL};
+
+static Env *new_env(Env *next) {
+  Env *env = calloc(1, sizeof(Env));
+  env->typedefs = new_map();
+  env->tags = new_map();
+  env->next = next;
+  return env;
+}
 
 static Node *assign();
 
@@ -29,6 +44,7 @@ static Type *new_prim_ty(int ty, int size) {
   return ret;
 }
 
+static Type *void_ty() { return new_prim_ty(VOID, 0); }
 static Type *char_ty() { return new_prim_ty(CHAR, 1); }
 static Type *int_ty() { return new_prim_ty(INT, 4); }
 
@@ -42,33 +58,63 @@ static bool consume(int ty) {
 
 static bool is_typename() {
   Token *t = tokens->data[pos];
-  return t->ty == TK_INT || t->ty == TK_CHAR || t->ty == TK_STRUCT;
+  if (t->ty == TK_IDENT)
+    return map_exists(env->typedefs, t->name);
+  return t->ty == TK_INT || t->ty == TK_CHAR || t->ty == TK_VOID ||
+          t->ty == TK_STRUCT;
 }
 
 static Node *decl();
 
 static Type *read_type() {
-  Token *t = tokens->data[pos];
+  Token *t = tokens->data[pos++];
 
-  if (t->ty == TK_INT) {
-    pos++;
+  if (t->ty == TK_IDENT) {
+    Type *ty = map_get(env->typedefs, t->name);
+    if (!ty)
+      pos--;
+    return ty;
+  }
+
+  if (t->ty == TK_INT)
     return int_ty();
-  }
 
-  if (t->ty == TK_CHAR) {
-    pos++;
+  if (t->ty == TK_CHAR)
     return char_ty();
-  }
+
+  if (t->ty == TK_VOID)
+    return void_ty();
 
   if (t->ty == TK_STRUCT) {
-    pos++;
-    expect('{');
-    Vector *members = new_vec();
-    while (!consume('}'))
-      vec_push(members, decl());
+    char *tag = NULL;
+    Token *t = tokens->data[pos];
+    if (t->ty == TK_IDENT) {
+      pos++;
+      tag = t->name;
+    }
+
+    Vector *members = NULL;
+    if (consume('{')) {
+      members = new_vec();
+      while (!consume('}'))
+        vec_push(members, decl());
+    }
+
+    if (!tag && !members)
+      error("bad struct definition");
+
+    if (tag && members) {
+      map_put(env->tags, tag, members);
+    } else if (tag && !members) {
+      members = map_get(env->tags, tag);
+      if (!members)
+        error("incomplete type: %s", tag);
+    }
+
     return struct_of(members);
   }
 
+  pos--;
   return NULL;
 }
 
@@ -157,19 +203,32 @@ static Node *mul();
 static Node *postfix() {
   Node *lhs = primary();
 
-  if (consume('.')) {
-    Node *node = calloc(1, sizeof(Node));
-    node->op = ND_DOT;
-    node->expr = lhs;
-    node->member = ident();
-    return node;
-  }
+  for (;;) {
+    if (consume('.')) {
+      Node *node = calloc(1, sizeof(Node));
+      node->op = ND_DOT;
+      node->expr = lhs;
+      node->name = ident();
+      lhs = node;
+      continue;
+    }
 
-  while (consume('[')) {
-    lhs = new_expr(ND_DEREF, new_binop('+', lhs, assign()));
-    expect(']');
+    if (consume(TK_ARROW)) {
+      Node *node = calloc(1, sizeof(Node));
+      node->op = ND_DOT;
+      node->expr = new_expr(ND_DEREF, lhs);
+      node->name = ident();
+      lhs = node;
+      continue;
+    }
+
+    if (consume('[')) {
+      lhs = new_expr(ND_DEREF, new_binop('+', lhs, assign()));
+      expect(']');
+      continue;
+    }
+    return lhs;
   }
-  return lhs;
 }
 
 static Node *unary() {
@@ -310,6 +369,8 @@ static Node *decl() {
 
   // Read the second half of type name (e.g. `[3][5]`).
   node->ty = read_array(node->ty);
+  if (node->ty->ty == VOID)
+    error("void variable: %s", node->name);
 
   // Read an initializer.
   if (consume('='))
@@ -337,6 +398,13 @@ static Node *stmt() {
   Token *t = tokens->data[pos];
 
   switch (t->ty) {
+  case TK_TYPEDEF: {
+    pos++;
+    Node *node = decl();
+    assert(node->name);
+    map_put(env->typedefs, node->name, node->ty);
+    return &null_stmt;
+  }
   case TK_INT:
   case TK_CHAR:
   case TK_STRUCT:
@@ -404,6 +472,8 @@ static Node *stmt() {
     pos++;
     return &null_stmt;
   default:
+    if (is_typename())
+      return decl();
     return expr_stmt();
   }
 }
@@ -413,8 +483,10 @@ static Node *compound_stmt() {
   node->op = ND_COMP_STMT;
   node->stmts = new_vec();
 
+  env = new_env(env);
   while (!consume('}'))
     vec_push(node->stmts, stmt());
+  env = env->next;
   return node;
 }
 
@@ -466,6 +538,7 @@ static Node *toplevel() {
 Vector *parse(Vector *tokens_) {
   tokens = tokens_;
   pos = 0;
+  env = new_env(env);
 
   Vector *v = new_vec();
   while (((Token *)tokens->data[pos])->ty != TK_EOF)

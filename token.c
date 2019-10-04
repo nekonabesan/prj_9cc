@@ -28,11 +28,14 @@ static struct {
     {"return", TK_RETURN},
     {"sizeof", TK_SIZEOF},
     {"struct", TK_STRUCT},
+    {"typedef", TK_TYPEDEF},
+    {"void", TK_VOID},
     {"while", TK_WHILE},
-    {"&&", TK_LOGAND},
-    {"||", TK_LOGOR},
-    {"==", TK_EQ},
     {"!=", TK_NE},
+    {"&&", TK_LOGAND},
+    {"->", TK_ARROW},
+    {"==", TK_EQ},
+    {"||", TK_LOGOR},
     {NULL, 0},
 };
 
